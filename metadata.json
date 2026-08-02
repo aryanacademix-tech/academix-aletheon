@@ -1,0 +1,6 @@
+{
+  "name": "Synapse: Math & Logic",
+  "description": "An advanced math riddle and brain training app focused on logical thinking, reasoning, and pattern recognition. Features AI-generated puzzles, hints, and logic evaluation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

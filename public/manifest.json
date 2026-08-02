@@ -1,0 +1,17 @@
+{
+  "short_name": "Academix",
+  "name": "Academix Aletheon",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512 192x192 any"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "description": "Academix Aletheon - Advanced AI-powered study, research, and calculation productivity suite."
+}
