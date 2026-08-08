@@ -1,17 +1,205 @@
 {
-  "short_name": "Academix",
+  "id": "academix-aletheon-pwa",
   "name": "Academix Aletheon",
+  "short_name": "Academix",
+  "description": "Academix Aletheon - Advanced AI-powered study, research, and calculation productivity suite.",
+  "lang": "en-US",
+  "dir": "ltr",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui",
+    "window-controls-overlay",
+    "browser"
+  ],
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "orientation": "any",
+  "categories": [
+    "education",
+    "productivity",
+    "utilities"
+  ],
+  "iarc_rating_id": "e84b075f-2b22-4f22-9218-e3909794d0c1",
+  "prefer_related_applications": false,
+  "related_applications": [
+    {
+      "platform": "webapp",
+      "url": "https://ais-pre-mfbtgc66wlyyoihjqz2hrq-725181868505.asia-southeast1.run.app/manifest.json",
+      "id": "academix-aletheon-pwa"
+    }
+  ],
+  "scope_extensions": [
+    {
+      "origin": "*.run.app"
+    }
+  ],
+  "launch_handler": {
+    "client_mode": [
+      "navigate-existing",
+      "auto"
+    ]
+  },
+  "shortcuts": [
+    {
+      "name": "Focus Timer & Study",
+      "short_name": "Focus",
+      "description": "Start a focused study session with custom timers and ambient sounds",
+      "url": "/?feature=focustimer",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Quiz Master",
+      "short_name": "Quiz",
+      "description": "Generate interactive study quizzes and flashcards",
+      "url": "/?feature=quiz",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Keen Researchers",
+      "short_name": "Research",
+      "description": "AI-assisted deep academic research and query engine",
+      "url": "/?feature=research",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Outside the Box Puzzles",
+      "short_name": "Puzzles",
+      "description": "Brain teaser riddles and logic exercises",
+      "url": "/?feature=puzzles",
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "/",
+      "name": "Academic & Study Documents",
+      "accept": {
+        "text/plain": [
+          ".txt",
+          ".md"
+        ],
+        "application/pdf": [
+          ".pdf"
+        ],
+        "application/json": [
+          ".json"
+        ]
+      },
+      "icons": [
+        {
+          "src": "/pwa-192x192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "protocol_handlers": [
+    {
+      "protocol": "web+academix",
+      "url": "/?q=%s"
+    }
+  ],
+  "share_target": {
+    "action": "/?share=true",
+    "method": "GET",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "widgets": [
+    {
+      "name": "Academix Quick Stats",
+      "short_name": "Stats",
+      "description": "Track study streak, active tasks, and research progress",
+      "tag": "academix-quick-stats",
+      "template": "widget-template",
+      "ms_ac_template": "/widget-template.json",
+      "data": "/widget-data.json",
+      "type": "application/json",
+      "screenshots": [
+        {
+          "src": "/screenshot-mobile.png",
+          "sizes": "600x1200",
+          "label": "Academix Stats Widget Preview"
+        }
+      ]
+    }
+  ],
+  "edge_side_panel": {
+    "preferred_width": 480
+  },
+  "note_taking": {
+    "new_note_url": "/?feature=notes"
+  },
   "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/maskable-icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
     {
       "src": "/icon.svg",
       "type": "image/svg+xml",
       "sizes": "512x512 192x192 any"
     }
   ],
-  "start_url": "/",
-  "background_color": "#09090b",
-  "theme_color": "#09090b",
-  "display": "standalone",
-  "orientation": "portrait-primary",
-  "description": "Academix Aletheon - Advanced AI-powered study, research, and calculation productivity suite."
+  "screenshots": [
+    {
+      "src": "/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Academix Aletheon Desktop Interface"
+    },
+    {
+      "src": "/screenshot-mobile.png",
+      "sizes": "600x1200",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Academix Aletheon Mobile Application View"
+    }
+  ]
 }

@@ -1,9 +1,15 @@
-const CACHE_NAME = 'academix-pwa-v1';
+const CACHE_NAME = 'academix-pwa-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
   '/manifest.json',
-  '/icon.svg'
+  '/icon.svg',
+  '/pwa-192x192.png',
+  '/pwa-512x512.png',
+  '/maskable-icon-512x512.png',
+  '/apple-touch-icon.png',
+  '/screenshot-desktop.png',
+  '/screenshot-mobile.png'
 ];
 
 self.addEventListener('install', (event) => {

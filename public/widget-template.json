@@ -1,0 +1,31 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.5",
+  "body": [
+    {
+      "type": "TextBlock",
+      "text": "Academix Aletheon",
+      "weight": "Bolder",
+      "size": "Medium",
+      "color": "Accent"
+    },
+    {
+      "type": "TextBlock",
+      "text": "Daily Study Streak: ${streak} days",
+      "wrap": true
+    },
+    {
+      "type": "TextBlock",
+      "text": "Total XP: ${xp}",
+      "wrap": true
+    }
+  ],
+  "actions": [
+    {
+      "type": "Action.OpenUrl",
+      "title": "Open Academix",
+      "url": "https://ais-pre-mfbtgc66wlyyoihjqz2hrq-725181868505.asia-southeast1.run.app"
+    }
+  ]
+}

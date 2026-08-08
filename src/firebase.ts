@@ -1,6 +1,13 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { getFirestore, setLogLevel, Firestore } from 'firebase/firestore';
+
+// Silence non-fatal Firestore internal SDK warnings (e.g. unprovisioned default database)
+try {
+  setLogLevel('silent');
+} catch (e) {
+  // Ignore log level configuration errors
+}
 
 const firebaseConfig = {
   projectId: "gen-lang-client-0711810179",
@@ -15,4 +22,24 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 googleProvider.setCustomParameters({ prompt: 'select_account' });
-export const db = getFirestore(app);
+
+let firestoreDb: Firestore | null = null;
+let firestoreSyncEnabled = true;
+
+try {
+  firestoreDb = getFirestore(app);
+} catch (err) {
+  firestoreSyncEnabled = false;
+  console.warn("Firestore database not initialized or unavailable. Gracefully falling back to client localStorage.", err);
+}
+
+export const disableFirestoreSync = () => {
+  firestoreSyncEnabled = false;
+};
+
+export const isFirestoreSyncEnabled = (): boolean => {
+  return firestoreSyncEnabled && firestoreDb !== null;
+};
+
+export const db = firestoreDb;
+

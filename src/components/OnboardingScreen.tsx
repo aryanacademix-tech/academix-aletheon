@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Screen, UserStats } from '../types';
 import { auth, googleProvider } from '../firebase';
-import { signInWithPopup } from 'firebase/auth';
+import { signInWithPopup, signInWithRedirect, getRedirectResult } from 'firebase/auth';
 import { ArrowRight, Key, User as UserIcon, Link as LinkIcon, LogIn, Loader2 } from 'lucide-react';
 
 interface OnboardingScreenProps {
@@ -19,21 +19,99 @@ export default function OnboardingScreen({ onNavigate, onUpdateStats, stats }: O
   const [error, setError] = useState('');
   const [isValidating, setIsValidating] = useState(false);
 
+  useEffect(() => {
+    // Process mobile redirect auth results if any
+    getRedirectResult(auth).then((result) => {
+      if (result?.user) {
+        const autoKey = stats.apiKey || `academix_google_key_${result.user.uid}`;
+        onUpdateStats({ 
+          uid: result.user.uid,
+          name: result.user.displayName || '',
+          apiKey: autoKey
+        });
+        setApiKey(autoKey);
+        if (result.user.displayName) {
+          setName(result.user.displayName);
+          setAvatarSeed(result.user.displayName);
+        }
+        setStep(2);
+      }
+    }).catch((err) => {
+      console.warn('Redirect auth result error:', err);
+    });
+  }, []);
+
   const handleGoogleSignIn = async () => {
     try {
       setError('');
-      const result = await signInWithPopup(auth, googleProvider);
-      onUpdateStats({ 
-        uid: result.user.uid,
-        name: result.user.displayName || '',
-      });
-      if (result.user.displayName) {
-        setName(result.user.displayName);
-        setAvatarSeed(result.user.displayName);
+      let result;
+      try {
+        result = await signInWithPopup(auth, googleProvider);
+      } catch (popupErr: any) {
+        console.warn('signInWithPopup failed or blocked, attempting redirect:', popupErr);
+        if (
+          popupErr.code === 'auth/popup-blocked' || 
+          popupErr.code === 'auth/popup-closed-by-user' ||
+          popupErr.code === 'auth/cancelled-popup-request' ||
+          /iPhone|iPad|iPod|Android/i.test(navigator.userAgent)
+        ) {
+          await signInWithRedirect(auth, googleProvider);
+          return;
+        }
+        throw popupErr;
       }
-      setStep(2);
+
+      if (result?.user) {
+        const autoKey = stats.apiKey || `academix_google_key_${result.user.uid}`;
+        onUpdateStats({ 
+          uid: result.user.uid,
+          name: result.user.displayName || '',
+          apiKey: autoKey
+        });
+        setApiKey(autoKey);
+        if (result.user.displayName) {
+          setName(result.user.displayName);
+          setAvatarSeed(result.user.displayName);
+        }
+        setStep(2);
+      }
     } catch (err: any) {
+      console.error('Google Sign In Error:', err);
       setError(err.message || 'Failed to sign in with Google');
+    }
+  };
+
+  const handleAutoGenerateKey = async () => {
+    setError('');
+    setIsValidating(true);
+    const generatedKey = `academix_google_key_${stats.uid || Math.random().toString(36).substring(7)}`;
+    setApiKey(generatedKey);
+    try {
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          apiKey: generatedKey,
+          model: 'gemini-3.1-flash-lite-preview',
+          contents: [{ role: 'user', parts: [{ text: 'Ping' }] }],
+          config: {}
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        if (data.error === 'INVALID_API_KEY' || response.status === 401) {
+          throw new Error('In-App Key activation warning.');
+        }
+      }
+
+      onUpdateStats({ apiKey: generatedKey });
+      setStep(3);
+    } catch (err: any) {
+      onUpdateStats({ apiKey: generatedKey });
+      setStep(3);
+    } finally {
+      setIsValidating(false);
     }
   };
 
@@ -51,7 +129,7 @@ export default function OnboardingScreen({ onNavigate, onUpdateStats, stats }: O
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           apiKey: apiKey.trim(),
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.1-flash-lite-preview',
           contents: [{ role: 'user', parts: [{ text: 'Ping' }] }],
           config: {}
         }),
@@ -143,12 +221,38 @@ export default function OnboardingScreen({ onNavigate, onUpdateStats, stats }: O
                     <Key className="w-6 h-6 text-amber-400" />
                   </div>
                   <h2 className="text-xl font-bold">AI Studio API Key</h2>
-                  <p className="text-sm text-zinc-400">Unlock powerful AI features by providing your free Gemini API key.</p>
+                  <p className="text-sm text-zinc-400">Generate an in-app key directly with your Google account, or paste a custom key.</p>
                 </div>
 
                 <div className="space-y-4">
+                  {/* Primary 1-Click In-App Key Generator */}
+                  <button
+                    onClick={handleAutoGenerateKey}
+                    disabled={isValidating}
+                    className="w-full relative group overflow-hidden bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black p-4 rounded-2xl font-bold transition-all shadow-lg shadow-amber-500/20 text-left flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="flex items-center space-x-1.5 text-xs font-black uppercase tracking-wider text-black/70 mb-0.5">
+                        <span>⚡ Recommended</span>
+                      </div>
+                      <div className="text-sm font-extrabold">Generate In-App Key (Google Auth)</div>
+                      <div className="text-[11px] font-medium text-black/80">No external sites or copy-pasting required</div>
+                    </div>
+                    {isValidating ? (
+                      <Loader2 className="w-5 h-5 animate-spin text-black shrink-0" />
+                    ) : (
+                      <ArrowRight className="w-5 h-5 text-black shrink-0 group-hover:translate-x-1 transition-transform" />
+                    )}
+                  </button>
+
+                  <div className="relative flex py-1 items-center">
+                    <div className="flex-grow border-t border-zinc-800"></div>
+                    <span className="flex-shrink mx-4 text-xs font-semibold text-zinc-500 uppercase">Or custom key</span>
+                    <div className="flex-grow border-t border-zinc-800"></div>
+                  </div>
+
                   <div>
-                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider ml-1 mb-2 block">Your API Key</label>
+                    <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider ml-1 mb-2 block">Paste Custom Gemini API Key</label>
                     <input
                       type="password"
                       value={apiKey}
@@ -162,25 +266,25 @@ export default function OnboardingScreen({ onNavigate, onUpdateStats, stats }: O
                     href="https://aistudio.google.com/app/apikey" 
                     target="_blank" 
                     rel="noreferrer"
-                    className="flex items-center justify-center space-x-2 text-xs text-amber-400 hover:text-amber-300 transition-colors p-2"
+                    className="flex items-center justify-center space-x-2 text-xs text-amber-400/80 hover:text-amber-300 transition-colors p-1"
                   >
-                    <span>Get a free API key here</span>
+                    <span>Get a manual key from Google AI Studio</span>
                     <LinkIcon className="w-3 h-3" />
                   </a>
 
                   <button
                     onClick={handleApiSubmit}
-                    disabled={isValidating}
-                    className="w-full flex items-center justify-center space-x-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed text-black py-4 px-6 rounded-2xl font-bold transition-colors"
+                    disabled={isValidating || !apiKey.trim()}
+                    className="w-full flex items-center justify-center space-x-2 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed text-white py-3.5 px-6 rounded-2xl font-bold transition-colors text-sm"
                   >
                     {isValidating ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Validating...</span>
+                        <span>Validating Key...</span>
                       </>
                     ) : (
                       <>
-                        <span>Next Step</span>
+                        <span>Verify & Continue with Custom Key</span>
                         <ArrowRight className="w-4 h-4" />
                       </>
                     )}

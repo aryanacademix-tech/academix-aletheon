@@ -1,0 +1,17 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profile and Stats",
+      "description": "Stores user puzzle stats, streak, level, and XP",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "xp": { "type": "number" },
+        "level": { "type": "number" },
+        "streak": { "type": "number" },
+        "puzzlesSolved": { "type": "number" }
+      },
+      "required": ["uid"]
+    }
+  }
+}

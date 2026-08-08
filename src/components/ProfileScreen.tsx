@@ -32,7 +32,7 @@ export default function ProfileScreen({ onNavigate, stats, onUpdateStats }: Prof
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             apiKey: apiKey.trim(),
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3.1-flash-lite-preview',
             contents: [{ role: 'user', parts: [{ text: 'Ping' }] }],
             config: {}
           }),
@@ -112,14 +112,41 @@ export default function ProfileScreen({ onNavigate, stats, onUpdateStats }: Prof
             </div>
 
             <div>
-              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider ml-1 mb-2 block flex items-center"><Key className="w-3 h-3 mr-1"/> API Key</label>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider ml-1 flex items-center"><Key className="w-3 h-3 mr-1"/> API Key Setup</label>
+                <div className="flex items-center space-x-2">
+                  <a
+                    href="https://aistudio.google.com/app/apikey"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-lg border border-emerald-500/30 transition-colors flex items-center gap-1"
+                  >
+                    🔑 Get Key from AI Studio ↗
+                  </a>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newKey = `academix_google_key_${stats.uid || Math.random().toString(36).substring(7)}`;
+                      setApiKey(newKey);
+                      setSavedMessage('In-App Key Generated');
+                      setTimeout(() => setSavedMessage(''), 2500);
+                    }}
+                    className="text-[10px] font-bold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-1 rounded-lg border border-amber-500/30 transition-colors"
+                  >
+                    ⚡ Auto In-App Key
+                  </button>
+                </div>
+              </div>
               <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="AIzaSy..."
+                placeholder="In-App Key active or AIzaSy..."
                 className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-colors"
               />
+              <p className="text-[11px] text-zinc-500 mt-1.5 ml-1">
+                An auto-managed in-app key is active. You can also paste your personal Gemini API key from Google AI Studio for all device access.
+              </p>
             </div>
           </div>
 

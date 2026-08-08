@@ -1,173 +1,32 @@
 import React from 'react';
-import styled from 'styled-components';
+import { motion } from 'motion/react';
+import { BrainCircuit } from 'lucide-react';
 
 const Loader = () => {
   return (
-    <StyledWrapper>
-      <div className="loader">
-        <svg width={100} height={100} viewBox="0 0 100 100">
-          <defs>
-            <mask id="clipping">
-              <polygon points="0,0 100,0 100,100 0,100" fill="black" />
-              <polygon points="25,25 75,25 50,75" fill="white" />
-              <polygon points="50,25 75,75 25,75" fill="white" />
-              <polygon points="35,35 65,35 50,65" fill="white" />
-              <polygon points="35,35 65,35 50,65" fill="white" />
-              <polygon points="35,35 65,35 50,65" fill="white" />
-              <polygon points="35,35 65,35 50,65" fill="white" />
-            </mask>
-          </defs>
-        </svg>
-        <div className="box" />
-      </div>
-    </StyledWrapper>
+    <div className="relative flex items-center justify-center w-28 h-28 my-2">
+      {/* Outer spinning gradient ring */}
+      <motion.div
+        className="absolute inset-0 rounded-3xl bg-gradient-to-tr from-indigo-500/30 via-purple-500/20 to-teal-400/30 border border-indigo-500/40 shadow-[0_0_25px_rgba(99,102,241,0.3)]"
+        animate={{ scale: [1, 1.1, 1], rotate: [0, 180, 360] }}
+        transition={{ duration: 10, repeat: Infinity, ease: "linear" }}
+      />
+      {/* Inner counter-rotating ring */}
+      <motion.div
+        className="absolute inset-2 rounded-2xl bg-gradient-to-bl from-teal-400/20 via-indigo-600/30 to-purple-600/20 border border-teal-400/40"
+        animate={{ scale: [1.08, 0.95, 1.08], rotate: [360, 180, 0] }}
+        transition={{ duration: 7, repeat: Infinity, ease: "linear" }}
+      />
+      {/* Core emblem container */}
+      <motion.div
+        className="relative z-10 p-4 bg-zinc-900/90 backdrop-blur-md rounded-2xl border border-indigo-500/60 shadow-[0_0_30px_rgba(99,102,241,0.6)] flex items-center justify-center"
+        animate={{ scale: [0.95, 1.05, 0.95] }}
+        transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }}
+      >
+        <BrainCircuit className="w-10 h-10 text-teal-300 drop-shadow-[0_0_10px_rgba(45,212,191,0.8)]" />
+      </motion.div>
+    </div>
   );
-}
-
-const StyledWrapper = styled.div`
-  .loader {
-    --color-one: #a855f7;
-    --color-two: #7e22ce;
-    --color-three: #a855f780;
-    --color-four: #7e22ce80;
-    --color-five: #a855f740;
-    --time-animation: 2s;
-    --size: 1; /* You can change the size */
-    position: relative;
-    border-radius: 50%;
-    transform: scale(var(--size));
-    box-shadow:
-      0 0 25px 0 var(--color-three),
-      0 20px 50px 0 var(--color-four);
-    animation: colorize calc(var(--time-animation) * 3) ease-in-out infinite;
-  }
-
-  .loader::before {
-    content: "";
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100px;
-    height: 100px;
-    border-radius: 50%;
-    border-top: solid 1px var(--color-one);
-    border-bottom: solid 1px var(--color-two);
-    background: linear-gradient(180deg, var(--color-five), var(--color-four));
-    box-shadow:
-      inset 0 10px 10px 0 var(--color-three),
-      inset 0 -10px 10px 0 var(--color-four);
-  }
-
-  .loader .box {
-    width: 100px;
-    height: 100px;
-    background: linear-gradient(
-      180deg,
-      var(--color-one) 30%,
-      var(--color-two) 70%
-    );
-    mask: url(#clipping);
-    -webkit-mask: url(#clipping);
-  }
-
-  .loader svg {
-    position: absolute;
-  }
-
-  .loader svg #clipping {
-    filter: contrast(15);
-    animation: roundness calc(var(--time-animation) / 2) linear infinite;
-  }
-
-  .loader svg #clipping polygon {
-    filter: blur(7px);
-  }
-
-  .loader svg #clipping polygon:nth-child(1) {
-    transform-origin: 75% 25%;
-    transform: rotate(90deg);
-  }
-
-  .loader svg #clipping polygon:nth-child(2) {
-    transform-origin: 50% 50%;
-    animation: rotation var(--time-animation) linear infinite reverse;
-  }
-
-  .loader svg #clipping polygon:nth-child(3) {
-    transform-origin: 50% 60%;
-    animation: rotation var(--time-animation) linear infinite;
-    animation-delay: calc(var(--time-animation) / -3);
-  }
-
-  .loader svg #clipping polygon:nth-child(4) {
-    transform-origin: 40% 40%;
-    animation: rotation var(--time-animation) linear infinite reverse;
-  }
-
-  .loader svg #clipping polygon:nth-child(5) {
-    transform-origin: 40% 40%;
-    animation: rotation var(--time-animation) linear infinite reverse;
-    animation-delay: calc(var(--time-animation) / -2);
-  }
-
-  .loader svg #clipping polygon:nth-child(6) {
-    transform-origin: 60% 40%;
-    animation: rotation var(--time-animation) linear infinite;
-  }
-
-  .loader svg #clipping polygon:nth-child(7) {
-    transform-origin: 60% 40%;
-    animation: rotation var(--time-animation) linear infinite;
-    animation-delay: calc(var(--time-animation) / -1.5);
-  }
-
-  @keyframes rotation {
-    0% {
-      transform: rotate(0deg);
-    }
-    100% {
-      transform: rotate(360deg);
-    }
-  }
-
-  @keyframes roundness {
-    0% {
-      filter: contrast(15);
-    }
-    20% {
-      filter: contrast(3);
-    }
-    40% {
-      filter: contrast(3);
-    }
-    60% {
-      filter: contrast(15);
-    }
-    100% {
-      filter: contrast(15);
-    }
-  }
-
-  @keyframes colorize {
-    0% {
-      filter: hue-rotate(0deg);
-    }
-    20% {
-      filter: hue-rotate(-30deg);
-    }
-    40% {
-      filter: hue-rotate(-60deg);
-    }
-    60% {
-      filter: hue-rotate(-90deg);
-    }
-    80% {
-      filter: hue-rotate(-45deg);
-    }
-    100% {
-      filter: hue-rotate(0deg);
-    }
-  }
-`;
+};
 
 export default Loader;

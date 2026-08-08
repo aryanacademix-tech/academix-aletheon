@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { ChevronLeft, BrainCircuit, Play, Timer, Trophy, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { Screen } from '../types';
 import { recordSkillActivity } from '../utils/dailyTracker';
+import GeneratingLoader from './GeneratingLoader';
 
 interface QuizMasterScreenProps {
   onNavigate: (screen: Screen) => void;
@@ -15,6 +16,15 @@ const SUBJECTS = [
   'Literature', 'Custom'
 ];
 const DIFFICULTIES = ['Easy', 'Medium', 'Hard', 'Extreme', 'All'];
+const QUESTION_TYPES = [
+  'Multiple Choice Questions (MCQs)',
+  'Multiple Select',
+  'True/False',
+  'Fill in the Blanks',
+  'Match the Following',
+  'Assertion & Reason',
+  'Case-Based Questions'
+];
 
 type Question = {
   question: string;
@@ -36,6 +46,7 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
   const [questionsCount, setQuestionsCount] = useState(15);
   const [timeMin, setTimeMin] = useState(5);
   const [difficulty, setDifficulty] = useState('Medium');
+  const [selectedTypes, setSelectedTypes] = useState<string[]>(['Multiple Choice Questions (MCQs)']);
   
   // Quiz State
   const [questions, setQuestions] = useState<Question[]>([]);
@@ -83,9 +94,23 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
       Subject / Core Topic: ${activeSubject}
       Sub-topic / Details: ${topic || 'General overview'}
       Class / Grade Level: ${grade || 'General audience'}
+      Question Types Included: ${selectedTypes.join(', ')}
       Key Areas to Cover & Specific Instructions: ${descriptionPrompt || 'Cover fundamental to advanced concepts comprehensively.'}
       Number of Questions: ${questionsCount}
       Difficulty: ${difficulty}
+      
+      CRITICAL MATHEMATICAL & SYMBOL NOTATION RULES:
+      1. Use clean, plain text for mathematical formulas, equations, and expressions (e.g., use +, -, ×, ÷, ^, √, =).
+      2. DO NOT use raw LaTeX tags or commands (e.g. do NOT use \\frac, \\sqrt, \\times, \\cdot, etc.). Write fractions as a/b and square roots as √(x).
+      3. CLEAR SYMBOL LEGEND: If any special, non-standard, or operational symbol (such as *, ^, ⊕, ⊗, mod, !, #) is used in a question or formula, you MUST explicitly include a clear explanation inside the question text explaining what the symbol demonstrates (e.g., "Note: '^' denotes exponentiation (power)", "Note: 'a ⊕ b' represents (a*b) + 1", or "Note: 'mod' represents remainder after division").
+      
+      IMPORTANT FORMATTING RULE FOR ALL QUESTION TYPES:
+      Even if the question is True/False, Multiple Select, Fill in the Blanks, or Match the Following, you MUST format it as a 4-option single-choice question to fit the UI. 
+      - For True/False: Provide options like ["True", "False", "Not enough info", "None of these"].
+      - For Multiple Select: Provide options like ["Option A and B", "Option C only", "All of the above", "None of the above"].
+      - For Fill in the Blanks: Provide 4 possible options for the blank.
+      - For Match the Following: Include the matching pairs in the question text or options (e.g., option could be "1-A, 2-B, 3-C").
+      - For Case-Based: Include the short case directly in the question text.
       
       Format requirement: Return ONLY a JSON array, no markdown formatting, no backticks.
       [
@@ -100,8 +125,13 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
       let apiKey = '';
       try {
         const saved = localStorage.getItem('synapse_stats');
-        if (saved) apiKey = JSON.parse(saved).apiKey || '';
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          apiKey = parsed.apiKey || (parsed.uid ? `academix_google_key_${parsed.uid}` : '');
+        }
       } catch (e) {}
+
+      if (!apiKey) apiKey = 'academix_auto_key_default';
 
       const response = await fetch('/api/gemini', {
         method: 'POST',
@@ -298,6 +328,34 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
                 </div>
 
                 <div className="space-y-4">
+                  {/* Question Types Section */}
+                  <div>
+                    <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">Question Types</h3>
+                    <div className="flex flex-wrap gap-2">
+                      {QUESTION_TYPES.map(type => (
+                        <button
+                          key={type}
+                          onClick={() => {
+                            if (selectedTypes.includes(type)) {
+                              if (selectedTypes.length > 1) {
+                                setSelectedTypes(selectedTypes.filter(t => t !== type));
+                              }
+                            } else {
+                              setSelectedTypes([...selectedTypes, type]);
+                            }
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
+                            selectedTypes.includes(type)
+                              ? 'bg-teal-500/20 text-teal-400 border border-teal-500/50 shadow-sm'
+                              : 'bg-zinc-800/50 text-zinc-400 border border-zinc-700 hover:bg-zinc-800'
+                          }`}
+                        >
+                          {type}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
                   {/* Description Section */}
                   <div>
                     <h3 className="text-sm font-bold text-zinc-400 uppercase tracking-wider mb-2 flex items-center justify-between">
@@ -318,7 +376,7 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
                       <h3 className="text-xs font-bold text-zinc-400 uppercase tracking-wider mb-2">Topic Focus</h3>
                       <input 
                         type="text" 
-                        placeholder="e.g. Chapter 4..."
+                        placeholder="e.g. Chapter Name or Specific Topic..."
                         value={topic}
                         onChange={e => setTopic(e.target.value)}
                         className="w-full bg-zinc-800/50 border border-zinc-800 rounded-xl px-3.5 py-2.5 text-xs focus:outline-none focus:border-teal-500/50 transition-colors text-zinc-100 placeholder-zinc-500"
@@ -416,11 +474,11 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
               key="generating"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center space-y-6 text-center max-w-md bg-zinc-900 p-12 rounded-[2rem] border border-zinc-800 shadow-2xl shadow-teal-500/10"
+              className="flex flex-col items-center justify-center space-y-6 text-center max-w-md mx-auto w-full py-12"
             >
-              <Loader2 className="w-12 h-12 text-teal-400 animate-spin" />
-              <h2 className="text-2xl font-bold text-zinc-100">Forging Your Quiz...</h2>
-              <p className="text-zinc-400">AI is crafting unique questions tailored to your configuration. This usually takes a few seconds.</p>
+              <GeneratingLoader />
+              <h2 className="text-2xl font-bold text-zinc-100 mt-4">Forging Your Quiz...</h2>
+              <p className="text-zinc-400 text-sm max-w-sm">AI is crafting unique questions tailored to your configuration. This usually takes a few seconds.</p>
             </motion.div>
           )}
 
@@ -429,32 +487,32 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
               key="playing"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="w-full max-w-3xl flex flex-col h-full"
+              className="w-full max-w-3xl mx-auto flex flex-col h-full space-y-4"
             >
-              <div className="flex justify-between items-center mb-8 bg-zinc-900 p-4 rounded-2xl border border-zinc-800 shadow-md">
-                <div className="flex space-x-2 flex-1 mr-6">
+              <div className="flex justify-between items-center bg-zinc-900 p-4 rounded-2xl border border-zinc-800 shadow-md">
+                <div className="flex space-x-1.5 flex-1 mr-4 overflow-x-auto py-1">
                   {questions.map((_, i) => (
                     <div 
                       key={i} 
-                      className={`h-2.5 rounded-full transition-all ${i === currentQIndex ? 'flex-[3] bg-gradient-to-r from-teal-500 to-cyan-500' : i < currentQIndex ? 'flex-1 bg-teal-500/10' : 'flex-1 bg-zinc-800/50'}`}
+                      className={`h-2.5 min-w-[10px] rounded-full transition-all ${i === currentQIndex ? 'flex-[3] bg-gradient-to-r from-teal-500 to-cyan-500' : i < currentQIndex ? 'flex-1 bg-teal-500/20' : 'flex-1 bg-zinc-800/50'}`}
                     />
                   ))}
                 </div>
-                <div className={`font-mono text-xl font-bold flex items-center ${quizTimer < 60 ? 'text-red-400 animate-pulse' : 'text-zinc-100'}`}>
-                  <Timer className="w-5 h-5 mr-2" />
+                <div className={`font-mono text-lg md:text-xl font-bold flex items-center shrink-0 ${quizTimer < 60 ? 'text-red-400 animate-pulse' : 'text-zinc-100'}`}>
+                  <Timer className="w-4 h-4 md:w-5 md:h-5 mr-1.5" />
                   {formatTime(quizTimer)}
                 </div>
               </div>
 
               <div className="flex-1 flex flex-col justify-center">
-                <div className="bg-zinc-900 border border-zinc-800 rounded-[2rem] p-8 md:p-12 shadow-2xl shadow-teal-500/10 relative overflow-hidden">
+                <div className="bg-zinc-900 border border-zinc-800 rounded-2xl md:rounded-[2rem] p-5 md:p-10 shadow-2xl shadow-teal-500/10 relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-teal-500 to-cyan-500" />
                   
-                  <span className="text-cyan-500 font-bold text-sm tracking-wider uppercase mb-4 block">
+                  <span className="text-cyan-500 font-bold text-xs md:text-sm tracking-wider uppercase mb-3 block">
                     Question {currentQIndex + 1} of {questions.length}
                   </span>
                   
-                  <h2 className="text-2xl md:text-3xl font-bold text-zinc-100 mb-8 leading-tight">
+                  <h2 className="text-lg md:text-2xl font-bold text-zinc-100 mb-6 leading-relaxed break-words max-w-full overflow-hidden">
                     {questions[currentQIndex].question}
                   </h2>
 
@@ -463,19 +521,19 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
                       <button
                         key={idx}
                         onClick={() => handleAnswer(idx)}
-                        className={`w-full text-left p-5 rounded-2xl border-2 transition-all ${
+                        className={`w-full text-left p-4 md:p-5 rounded-2xl border-2 transition-all ${
                           selectedAnswers[currentQIndex] === idx 
                             ? 'bg-teal-500/10 border-teal-500/50 text-zinc-100 shadow-md' 
-                            : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:border-teal-500/50/50 hover:bg-zinc-800/50'
+                            : 'bg-zinc-950 border-zinc-800 text-zinc-300 hover:border-teal-500/50 hover:bg-zinc-800/50'
                         }`}
                       >
-                        <div className="flex items-center">
-                          <span className={`w-8 h-8 rounded-full flex items-center justify-center mr-4 text-sm font-bold transition-colors ${
+                        <div className="flex items-start">
+                          <span className={`w-7 h-7 md:w-8 md:h-8 rounded-full flex items-center justify-center mr-3 text-xs md:text-sm font-bold shrink-0 transition-colors ${
                             selectedAnswers[currentQIndex] === idx ? 'bg-teal-500 text-white' : 'bg-zinc-800/50 text-zinc-400 border border-zinc-800'
                           }`}>
                             {['A', 'B', 'C', 'D'][idx]}
                           </span>
-                          <span className="text-lg font-medium">{opt}</span>
+                          <span className="text-sm md:text-base font-medium break-words min-w-0 flex-1 leading-relaxed">{opt}</span>
                         </div>
                       </button>
                     ))}
@@ -483,11 +541,11 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
                 </div>
               </div>
 
-              <div className="mt-8 flex justify-between items-center">
+              <div className="pt-4 flex justify-between items-center gap-2">
                 <button 
                   onClick={() => setCurrentQIndex(prev => Math.max(0, prev - 1))}
                   disabled={currentQIndex === 0}
-                  className="px-6 py-3 rounded-xl font-bold text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 disabled:opacity-50 transition-colors"
+                  className="px-4 md:px-6 py-3 rounded-xl font-bold text-xs md:text-sm text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 disabled:opacity-50 transition-colors"
                 >
                   Previous
                 </button>
@@ -495,14 +553,14 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
                 {currentQIndex === questions.length - 1 ? (
                   <button 
                     onClick={handleQuizComplete}
-                    className="px-8 py-3 bg-gradient-to-r from-teal-500 to-cyan-500 hover:opacity-90 text-white font-bold rounded-xl shadow-md transition-all active:scale-95"
+                    className="px-6 md:px-8 py-3 bg-gradient-to-r from-teal-500 to-cyan-500 hover:opacity-90 text-white font-bold text-xs md:text-sm rounded-xl shadow-md transition-all active:scale-95"
                   >
                     Submit Quiz
                   </button>
                 ) : (
                   <button 
                     onClick={() => setCurrentQIndex(prev => Math.min(questions.length - 1, prev + 1))}
-                    className="px-8 py-3 bg-zinc-900 hover:bg-zinc-800/50 text-zinc-100 border border-zinc-800 font-bold rounded-xl shadow-md transition-all active:scale-95"
+                    className="px-6 md:px-8 py-3 bg-zinc-900 hover:bg-zinc-800/50 text-zinc-100 border border-zinc-800 font-bold text-xs md:text-sm rounded-xl shadow-md transition-all active:scale-95"
                   >
                     Next Question
                   </button>

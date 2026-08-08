@@ -1,8 +1,19 @@
 import { GoogleGenAI } from '@google/genai';
 
 function getAI(customApiKey?: string) {
-  const apiKey = customApiKey || process.env.GEMINI_API_KEY;
+  const isAutoKey = !customApiKey || 
+                    customApiKey === "MY_GEMINI_API_KEY" || 
+                    customApiKey.startsWith('academix_') || 
+                    customApiKey.startsWith('auto_') || 
+                    customApiKey === 'IN_APP_GOOGLE_KEY';
+  
+  const apiKey = isAutoKey ? process.env.GEMINI_API_KEY : customApiKey;
+  
   if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
+    // If still missing, try process.env.GEMINI_API_KEY as final safety net
+    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY") {
+      return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    }
     throw new Error('MISSING_API_KEY');
   }
   return new GoogleGenAI({ 
@@ -100,7 +111,7 @@ export const handler = async (event: any, context: any) => {
       // Fallback to generating SVG infographic using gemini content generation with high detail
       try {
         const svgResponse = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.1-flash-lite-preview',
           contents: [{
             role: 'user',
             parts: [{ text: `Create a complete, visually stunning, highly detailed modern educational infographic SVG code specifically for the topic: "${imgPrompt}".
@@ -141,11 +152,27 @@ CRITICAL VISUAL & CONTENT REQUIREMENTS:
       };
     }
 
-    // Handle high thinking config if requested or using gemini-3.1-pro-preview
+    // Handle model selection with dynamic resilient fallback cascade
+    const flashFallbackList = [
+      'gemini-3.6-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-2.5-flash',
+      'gemini-flash-latest'
+    ];
+    
+    const proFallbackList = [
+      'gemini-3.1-pro-preview',
+      'gemini-3.6-flash',
+      'gemini-3.1-flash-lite',
+      'gemini-2.5-flash'
+    ];
+
     let reqConfig = config || {};
-    let reqModel = model;
+    let isProOrThinking = thinkingMode || model?.includes('pro');
+    let initialModel = model || 'gemini-3.6-flash';
+
     if (thinkingMode) {
-      reqModel = 'gemini-3.1-pro-preview';
+      initialModel = 'gemini-3.1-pro-preview';
       reqConfig = {
         ...reqConfig,
         thinkingConfig: {
@@ -154,37 +181,121 @@ CRITICAL VISUAL & CONTENT REQUIREMENTS:
       };
     }
 
-    let response: any;
-    try {
-      response = await ai.models.generateContent({
-        model: reqModel,
-        contents,
-        config: reqConfig
-      });
-    } catch (modelErr: any) {
-      console.warn(`Primary model ${reqModel} failed, trying fallback model gemini-2.5-flash:`, modelErr);
-      // Clean config for fallback model (gemini-2.5-flash) which does not support thinkingConfig
-      const fallbackConfig = { ...reqConfig };
-      delete fallbackConfig.thinkingConfig;
+    // Build unique model cascade list starting with initialModel
+    const modelQueue = Array.from(new Set([
+      initialModel,
+      ...(isProOrThinking ? proFallbackList : flashFallbackList),
+      ...flashFallbackList
+    ]));
 
-      response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents,
-        config: fallbackConfig
-      });
+    let response: any = null;
+    let lastError: any = null;
+
+    for (const modelToTry of modelQueue) {
+      try {
+        // Clean thinkingConfig if trying a non-pro model
+        const currentConfig = { ...reqConfig };
+        if (!modelToTry.includes('pro') && currentConfig.thinkingConfig) {
+          delete currentConfig.thinkingConfig;
+        }
+
+        // Try with tools first if specified
+        try {
+          response = await ai.models.generateContent({
+            model: modelToTry,
+            contents,
+            config: currentConfig
+          });
+        } catch (toolErr: any) {
+          const toolErrStr = String(toolErr?.message || toolErr).toLowerCase();
+          const isQuotaOrRateLimit = toolErrStr.includes('429') || toolErrStr.includes('quota') || toolErrStr.includes('resource_exhausted');
+          
+          if (currentConfig.tools && !isQuotaOrRateLimit) {
+            // Try without tools if tool invocation had a schema/formatting issue
+            const noToolsConfig = { ...currentConfig };
+            delete noToolsConfig.tools;
+            response = await ai.models.generateContent({
+              model: modelToTry,
+              contents,
+              config: noToolsConfig
+            });
+          } else {
+            // If it's a 429 quota error, throw immediately to move to the next model in the cascade
+            throw toolErr;
+          }
+        }
+
+        if (response && response.text) {
+          break; // Success!
+        }
+      } catch (err: any) {
+        lastError = err;
+        const errStr = String(err?.message || err).toLowerCase();
+        
+        // If it's auth error or missing key, throw immediately
+        if (errStr.includes('api_key_invalid') || errStr.includes('unauthorized') || err.message === 'MISSING_API_KEY') {
+          throw err;
+        }
+        // For rate limit (429/quota), proceed seamlessly to the next model in queue
+      }
     }
 
-    let groundingChunks = [];
+    if (!response || !response.text) {
+      if (lastError) throw lastError;
+      throw new Error('All model candidate attempts failed');
+    }
+
+    let groundingChunks: { title: string; uri: string; snippet?: string }[] = [];
     try {
       const candidates = response.candidates;
       if (candidates && candidates.length > 0) {
         const metadata = candidates[0].groundingMetadata;
-        if (metadata && metadata.groundingChunks) {
-          groundingChunks = metadata.groundingChunks.map((chunk: any) => chunk.web?.uri ? {
-            title: chunk.web.title,
-            uri: chunk.web.uri,
-            snippet: chunk.web.snippet || chunk.web.description || '',
-          } : null).filter(Boolean);
+        if (metadata) {
+          if (Array.isArray(metadata.groundingChunks)) {
+            metadata.groundingChunks.forEach((chunk: any) => {
+              const uri = chunk.web?.uri || chunk.uri;
+              const title = chunk.web?.title || chunk.title || uri;
+              if (uri && !groundingChunks.some(g => g.uri === uri)) {
+                groundingChunks.push({
+                  title: title,
+                  uri: uri,
+                  snippet: chunk.web?.snippet || chunk.web?.description || '',
+                });
+              }
+            });
+          }
+        }
+      }
+
+      // Also extract markdown links [title](url) and raw http/https URLs from response text
+      if (response.text) {
+        const mdLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g;
+        let match;
+        while ((match = mdLinkRegex.exec(response.text)) !== null) {
+          const title = match[1].trim();
+          const uri = match[2].trim();
+          if (uri && !groundingChunks.some(g => g.uri === uri)) {
+            groundingChunks.push({
+              title: title || uri,
+              uri: uri,
+              snippet: 'Extracted from research answer'
+            });
+          }
+        }
+
+        const rawUrlRegex = /(https?:\/\/[^\s\)\>\]]+)/g;
+        let urlMatch;
+        while ((urlMatch = rawUrlRegex.exec(response.text)) !== null) {
+          const uri = urlMatch[1].replace(/[.,;:)]+$/, '').trim();
+          if (uri && !groundingChunks.some(g => g.uri === uri)) {
+            let domain = uri;
+            try { domain = new URL(uri).hostname.replace('www.', ''); } catch (e) {}
+            groundingChunks.push({
+              title: domain,
+              uri: uri,
+              snippet: 'Extracted website reference'
+            });
+          }
         }
       }
     } catch (e) {

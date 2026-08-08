@@ -56,9 +56,27 @@ type QuizItem = {
   explanation?: string;
 };
 
+export type ResearchSession = {
+  id: string;
+  topic: string;
+  createdAt: number;
+  updatedAt: number;
+  messages: Message[];
+  mindMapData: MindMapTree | null;
+  flashcards: Flashcard[];
+  quizItems: QuizItem[];
+  discoveredResources: { title: string; uri: string; snippet?: string }[];
+  researchStyle: 'flash' | 'fast' | 'deep';
+};
+
 
 const RESEARCH_SYSTEM_INSTRUCTION = `You are an expert AI research and summarization assistant.
-First, understand the user's intent and the context of the query before generating any response. If web research is available, gather the most relevant, recent, and reliable information from trusted online sources, then synthesize it instead of copying it.
+First, understand the user's intent and the context of the query before generating any response. Gather the most relevant, recent, and reliable information from free and available online web resources, then synthesize it into a comprehensive, structured research summary.
+
+CRITICAL REQUIREMENT FOR ONLINE SOURCES & WEBSITE LINKS:
+- Perform online web research to gather up-to-date facts, concepts, and authoritative references.
+- Always cite your research sources using Markdown website links [Source Name](https://domain.com/path) throughout the body of your response and in a dedicated section at the end.
+- Every research summary MUST conclude with a "## 🌐 Verified Web Sources & Resources" section listing 3 to 6 active, real website links [Source Title](https://...) (e.g. Wikipedia, Britannica, NASA, MIT, Stanford, Khan Academy, PubMed, IEEE, Nature, official documentation, etc.) for further reading and verification.
 
 Create summaries that are:
 - Accurate, complete, and easy to understand.
@@ -74,9 +92,11 @@ Output format:
 ## Detailed Explanation
 ## Important Facts / Statistics (if relevant)
 ## Examples or Real-World Applications (if applicable)
+## 🌐 Verified Web Sources & Resources
+- Include 3 to 6 direct Markdown website links [Source Title](https://...) to real online research resources and articles.
 ## Key Takeaways (3–5 bullets)
 
-Prioritize clarity, readability, and educational value over length. Explain concepts instead of merely listing facts, and ensure the summary gives the user a complete understanding of the topic.`;
+Prioritize clarity, readability, educational value, and real reference link citations.`;
 
 export default function KeenResearchersScreen({ onNavigate, onActivityComplete }: KeenResearchersScreenProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -88,6 +108,168 @@ export default function KeenResearchersScreen({ onNavigate, onActivityComplete }
   const [showLeftPanel, setShowLeftPanel] = useState(true);
   const [isDesktopLeftPanelOpen, setIsDesktopLeftPanelOpen] = useState(true);
   const [showRightPanel, setShowRightPanel] = useState(false);
+
+  // Mind map state
+  const [mindMapData, setMindMapData] = useState<MindMapTree | null>(null);
+  const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
+  const [selectedMindMapNode, setSelectedMindMapNode] = useState<MindMapNode | null>(null);
+  const [isFullscreenMindMap, setIsFullscreenMindMap] = useState(false);
+  const [mindmapViewMode, setMindmapViewMode] = useState<'network' | 'tree'>('network');
+
+  // Study deck (Flashcards & Quiz) state
+  const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
+  const [currentCardIndex, setCurrentCardIndex] = useState(0);
+  const [isCardFlipped, setIsCardFlipped] = useState(false);
+
+  const [quizItems, setQuizItems] = useState<QuizItem[]>([]);
+  const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
+  const [selectedOption, setSelectedOption] = useState<number | null>(null);
+  const [quizScore, setQuizScore] = useState(0);
+  const [quizFinished, setQuizFinished] = useState(false);
+
+  const [discoveredResources, setDiscoveredResources] = useState<{title: string; uri: string; snippet?: string}[]>([]);
+  const [customLinkInput, setCustomLinkInput] = useState('');
+
+  // 30-Day Research Session History State
+  const [sessions, setSessions] = useState<ResearchSession[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+
+  // Load saved research sessions from localStorage on initial render
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('synapse_keen_research_sessions_v2');
+      if (raw) {
+        const parsed: ResearchSession[] = JSON.parse(raw);
+        const thirtyDaysAgo = Date.now() - (30 * 24 * 60 * 60 * 1000);
+        const valid = parsed.filter(s => s && s.updatedAt >= thirtyDaysAgo);
+        valid.sort((a, b) => b.updatedAt - a.updatedAt);
+        setSessions(valid);
+
+        if (valid.length > 0) {
+          const latest = valid[0];
+          setActiveSessionId(latest.id);
+          setMessages(latest.messages || []);
+          setMindMapData(latest.mindMapData || null);
+          setFlashcards(latest.flashcards || []);
+          setQuizItems(latest.quizItems || []);
+          setDiscoveredResources(latest.discoveredResources || []);
+          setResearchStyle(latest.researchStyle || 'fast');
+        }
+      }
+    } catch (e) {
+      console.error('Error loading research session history', e);
+    }
+  }, []);
+
+  // Auto-persist active session whenever messages or studio components update
+  useEffect(() => {
+    if (messages.length === 0) return;
+
+    const now = Date.now();
+    const firstUserMsg = messages.find(m => m.role === 'user');
+    const topicName = firstUserMsg ? firstUserMsg.content.trim().substring(0, 45) : 'Untitled Research Topic';
+
+    setSessions(prevSessions => {
+      let currentId = activeSessionId;
+      if (!currentId) {
+        currentId = 'session_' + now + '_' + Math.random().toString(36).substring(7);
+        setActiveSessionId(currentId);
+      }
+
+      const existingIndex = prevSessions.findIndex(s => s.id === currentId);
+      let updatedList: ResearchSession[] = [];
+
+      const updatedSession: ResearchSession = {
+        id: currentId,
+        topic: topicName,
+        createdAt: existingIndex >= 0 ? prevSessions[existingIndex].createdAt : now,
+        updatedAt: now,
+        messages,
+        mindMapData,
+        flashcards,
+        quizItems,
+        discoveredResources,
+        researchStyle,
+      };
+
+      if (existingIndex >= 0) {
+        updatedList = [...prevSessions];
+        updatedList[existingIndex] = updatedSession;
+      } else {
+        updatedList = [updatedSession, ...prevSessions];
+      }
+
+      const thirtyDaysAgo = now - (30 * 24 * 60 * 60 * 1000);
+      const validSessions = updatedList
+        .filter(s => s.updatedAt >= thirtyDaysAgo)
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+
+      try {
+        localStorage.setItem('synapse_keen_research_sessions_v2', JSON.stringify(validSessions));
+      } catch (e) {
+        console.error('Error saving research session history', e);
+      }
+
+      return validSessions;
+    });
+  }, [messages, mindMapData, flashcards, quizItems, discoveredResources, researchStyle]);
+
+  const handleSelectSession = (session: ResearchSession) => {
+    setActiveSessionId(session.id);
+    setMessages(session.messages || []);
+    setMindMapData(session.mindMapData || null);
+    setFlashcards(session.flashcards || []);
+    setQuizItems(session.quizItems || []);
+    setDiscoveredResources(session.discoveredResources || []);
+    setResearchStyle(session.researchStyle || 'fast');
+    if (window.innerWidth < 1024) {
+      setShowLeftPanel(false);
+    }
+  };
+
+  const handleNewResearch = () => {
+    setActiveSessionId(null);
+    setMessages([]);
+    setMindMapData(null);
+    setFlashcards([]);
+    setQuizItems([]);
+    setDiscoveredResources([]);
+    setInput('');
+    setSearchQuery('');
+    if (window.innerWidth < 1024) {
+      setShowLeftPanel(false);
+    }
+  };
+
+  const handleDeleteSession = (sessionId: string) => {
+    setSessions(prev => {
+      const filtered = prev.filter(s => s.id !== sessionId);
+      try {
+        localStorage.setItem('synapse_keen_research_sessions_v2', JSON.stringify(filtered));
+      } catch (e) {}
+
+      if (activeSessionId === sessionId) {
+        if (filtered.length > 0) {
+          const nextS = filtered[0];
+          setActiveSessionId(nextS.id);
+          setMessages(nextS.messages || []);
+          setMindMapData(nextS.mindMapData || null);
+          setFlashcards(nextS.flashcards || []);
+          setQuizItems(nextS.quizItems || []);
+          setDiscoveredResources(nextS.discoveredResources || []);
+          setResearchStyle(nextS.researchStyle || 'fast');
+        } else {
+          setActiveSessionId(null);
+          setMessages([]);
+          setMindMapData(null);
+          setFlashcards([]);
+          setQuizItems([]);
+          setDiscoveredResources([]);
+        }
+      }
+      return filtered;
+    });
+  };
 
   // Timeline / timer states
   const [lastExecutionTime, setLastExecutionTime] = useState<number | null>(null);
@@ -111,32 +293,34 @@ export default function KeenResearchersScreen({ onNavigate, onActivityComplete }
   const [userApiKey, setUserApiKey] = useState<string>(() => {
     try {
       const saved = localStorage.getItem('synapse_stats');
-      if (saved) return JSON.parse(saved).apiKey || '';
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return parsed.apiKey || (parsed.uid ? `academix_google_key_${parsed.uid}` : 'academix_auto_key_default');
+      }
     } catch(e) {}
-    return '';
+    return 'academix_auto_key_default';
   });
   const [showApiKeyModal, setShowApiKeyModal] = useState(false);
   const [tempApiKeyInput, setTempApiKeyInput] = useState('');
 
-  // Mind map state
-  const [mindMapData, setMindMapData] = useState<MindMapTree | null>(null);
-  const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({});
-  const [selectedMindMapNode, setSelectedMindMapNode] = useState<MindMapNode | null>(null);
-  const [isFullscreenMindMap, setIsFullscreenMindMap] = useState(false);
-  const [mindmapViewMode, setMindmapViewMode] = useState<'network' | 'tree'>('network');
-
-  // Study deck (Flashcards & Quiz) state
-  const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
-  const [currentCardIndex, setCurrentCardIndex] = useState(0);
-  const [isCardFlipped, setIsCardFlipped] = useState(false);
-
-  const [quizItems, setQuizItems] = useState<QuizItem[]>([]);
-  const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
-  const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [quizScore, setQuizScore] = useState(0);
-  const [quizFinished, setQuizFinished] = useState(false);
-
-  const [discoveredResources, setDiscoveredResources] = useState<{title: string; uri: string; snippet?: string}[]>([]);
+  const handleAddCustomLink = () => {
+    if (!customLinkInput.trim()) return;
+    let uri = customLinkInput.trim();
+    if (!uri.startsWith('http://') && !uri.startsWith('https://')) {
+      uri = 'https://' + uri;
+    }
+    let domain = uri;
+    try { domain = new URL(uri).hostname.replace('www.', ''); } catch(e) {}
+    
+    if (!discoveredResources.some(r => r.uri === uri)) {
+      setDiscoveredResources(prev => [{
+        title: domain || 'Custom Web Reference',
+        uri: uri,
+        snippet: 'Manually added custom research source'
+      }, ...prev]);
+    }
+    setCustomLinkInput('');
+  };
 
   const tools = [
     { 
@@ -173,6 +357,93 @@ export default function KeenResearchersScreen({ onNavigate, onActivityComplete }
       icon: HelpCircle, 
       color: 'text-rose-400', 
       prompt: 'Provide an extensive Question & Answer bank covering every essential concept and subtopic across the subject without limiting the question count.' 
+    },
+    {
+      id: 'summarizer',
+      label: 'Section Summarizer & Study Guide',
+      icon: BookOpen,
+      color: 'text-emerald-400',
+      prompt: `You are an **expert teacher, educational researcher, curriculum designer, and AI summarizer**. Your goal is **not to shorten information**, but to **transform complex research into a modern, structured, meaningful, and student-friendly learning resource**.
+
+## Core Objective
+Every response should help students **understand, remember, revise, and apply** knowledge—not simply read it. Organize information logically from basic concepts to advanced ideas. Never output large walls of text.
+
+# Output Principles
+* Explain concepts before details.
+* Organize information into clear sections with descriptive headings.
+* Use concise paragraphs, bullet points, tables, and comparisons whenever they improve understanding.
+* Highlight the most important ideas first.
+* Present information in a progressive learning flow.
+* Avoid repetition, filler, and unnecessary technical jargon.
+* If a concept is difficult, explain it in simple language first, then provide a more detailed explanation.
+* Make the output visually scannable and mobile-friendly.
+* Ensure every section adds value.
+
+# Required Output Structure
+
+## 📘 Topic Title
+A clear, descriptive title.
+
+## 🌟 Overview
+A 2–4 sentence explanation answering:
+* What is it?
+* Why is it important?
+* Where is it used?
+
+## ⚡ Quick Summary
+Summarize the entire topic in a small table.
+
+## 🎯 Learning Objectives
+Briefly state what the learner will understand after reading.
+
+## 🧠 Key Concepts
+Present each major concept separately. For every concept include: Definition, Purpose, How it works, Why it matters.
+
+## 📖 Detailed Explanation
+Break the topic into logical sections. For each section: Short explanation, Key points, Important observations, Diagrams or visuals if applicable, Examples. Never combine unrelated concepts into one paragraph.
+
+## 📊 Comparison Table
+Whenever two or more concepts are similar, create a comparison table.
+
+## 📐 Formulae / Equations (If applicable)
+Include: Formula, Variable meanings, SI units, Simple explanation, When to use it.
+
+## 🌍 Real-World Applications
+Explain where the concept is used.
+
+## 💡 Interesting Facts
+Include surprising, memorable, or important facts.
+
+## ⚠️ Common Misconceptions
+List common mistakes students make and explain the correct understanding.
+
+## 🎯 Exam Focus
+Highlight: Frequently asked questions, Important definitions, High-weightage concepts, Important diagrams, Frequently tested formulas.
+
+## 📝 Quick Revision
+Provide a one-minute revision using concise bullet points.
+
+## 🧠 Memory Tricks
+Create easy mnemonics, analogies, or shortcuts whenever possible.
+
+## 📚 Glossary
+List important terms with one-line definitions.
+
+## 🔗 Related Topics
+Suggest concepts the learner should study next.
+
+## 🌐 Verified Web Sources & Resources
+Include 3 to 6 direct Markdown website links [Source Title](https://...) to real online research resources, educational portals, and articles for further reading.
+
+## ❓ Practice Questions
+Generate: MCQs, Short Answer Questions, Long Answer Questions, Application-Based Questions, Higher Order Thinking Questions (HOTS).
+
+## 📌 Key Takeaways
+End with 5–10 concise points summarizing the entire topic.
+
+# Content Quality Rules
+Always explain concepts before definitions. Build knowledge step by step. Use comparison tables instead of long explanations when appropriate.
+The final output should feel like a premium AI-generated study guide. The learner should be able to understand the topic quickly, revise efficiently, and confidently prepare for exams.`
     },
     { 
       id: 'dictionary', 
@@ -319,10 +590,10 @@ Provide a quick, laser-focused answer sticking strictly to the topic and directl
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           apiKey: userApiKey,
-          model: researchStyle === 'deep' ? 'gemini-3.1-pro-preview' : 'gemini-2.5-flash',
+          model: researchStyle === 'deep' ? 'gemini-3.1-pro-preview' : 'gemini-3.6-flash',
           thinkingMode: researchStyle === 'deep',
           contents: [
-            ...messages.map(m => ({
+            ...messages.slice(-10).map(m => ({
               role: m.role === 'assistant' ? 'model' : 'user',
               parts: [{ text: m.content || 'Specialized Studio Deck Resource' }]
             })),
@@ -340,20 +611,53 @@ Provide a quick, laser-focused answer sticking strictly to the topic and directl
       const totalSec = parseFloat(((endTime - startTime) / 1000).toFixed(2));
       setLastExecutionTime(totalSec);
 
-      if (data.groundingChunks && data.groundingChunks.length > 0) {
-        setDiscoveredResources(prev => {
-          const newResources = [...prev];
-          data.groundingChunks.forEach((chunk: {title: string; uri: string; snippet?: string}) => {
-            if (!newResources.some(r => r.uri === chunk.uri)) {
-              newResources.push(chunk);
-            }
-          });
-          return newResources;
-        });
-      }
-
       if (response.ok) {
         const replyText = data.text || 'No response';
+
+        // Thoroughly extract web resources from groundingChunks as well as markdown links & URLs in replyText
+        const newExtracted: { title: string; uri: string; snippet?: string }[] = [];
+        if (data.groundingChunks && Array.isArray(data.groundingChunks)) {
+          data.groundingChunks.forEach((chunk: {title: string; uri: string; snippet?: string}) => {
+            if (chunk.uri && !newExtracted.some(r => r.uri === chunk.uri)) {
+              newExtracted.push(chunk);
+            }
+          });
+        }
+
+        // Extract markdown links [title](url) from replyText
+        const mdLinkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)/g;
+        let mdMatch;
+        while ((mdMatch = mdLinkRegex.exec(replyText)) !== null) {
+          const title = mdMatch[1].trim();
+          const uri = mdMatch[2].trim();
+          if (uri && !newExtracted.some(r => r.uri === uri)) {
+            newExtracted.push({ title: title || uri, uri, snippet: 'Extracted from research answer' });
+          }
+        }
+
+        // Extract raw URLs from replyText
+        const rawUrlRegex = /(https?:\/\/[^\s\)\>\]]+)/g;
+        let urlMatch;
+        while ((urlMatch = rawUrlRegex.exec(replyText)) !== null) {
+          const uri = urlMatch[1].replace(/[.,;:)]+$/, '').trim();
+          if (uri && !newExtracted.some(r => r.uri === uri)) {
+            let domain = uri;
+            try { domain = new URL(uri).hostname.replace('www.', ''); } catch (e) {}
+            newExtracted.push({ title: domain, uri, snippet: 'Website reference' });
+          }
+        }
+
+        if (newExtracted.length > 0) {
+          setDiscoveredResources(prev => {
+            const updated = [...prev];
+            newExtracted.forEach(item => {
+              if (!updated.some(u => u.uri === item.uri)) {
+                updated.push(item);
+              }
+            });
+            return updated;
+          });
+        }
 
         // Parse special types for dedicated studio spaces
         let parsedMindMap: MindMapTree | null = null;
@@ -432,11 +736,11 @@ Provide a quick, laser-focused answer sticking strictly to the topic and directl
           (data.error && (data.error.includes('429') || data.error.includes('quota') || data.error.includes('RESOURCE_EXHAUSTED') || data.error.includes('rate limit')));
 
         if (isRateLimit) {
-          setCooldownTimer(60);
+          setCooldownTimer(5); // Reduce to 5 seconds so they aren't blocked for 60s
           setMessages(prev => [...prev, {
             id: (Date.now() + 1).toString(),
             role: 'assistant',
-            content: `⏳ **Gemini API Rate Limit Cooldown (60 Seconds)**\n\nThe free shared API quota per minute was exceeded. An automatic **60-second timer** has been started to allow the rate limit window to refresh.\n\n* **Cooldown Remaining:** Check the timer banner at the bottom input bar.\n* **Tip:** Enter your own custom Gemini API key in **Settings / Custom API Key** (top right) to bypass shared limits!`,
+            content: `⏳ **Gemini API Rate Limit Reached**\n\nThe free shared API quota was exceeded. Please wait a few seconds and try again.\n\n* **Tip:** Enter your own custom Gemini API key in **Settings / Custom API Key** (top right) to bypass shared limits!`,
             executionTime: totalSec
           }]);
         } else {
@@ -506,6 +810,67 @@ Provide a quick, laser-focused answer sticking strictly to the topic and directl
             <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
           </div>
 
+          {/* 30-Day Recent Activities History */}
+          <div className="mb-6 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs text-zinc-400 font-semibold uppercase tracking-wider flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-blue-400" />
+                Recent Activities (30 Days)
+              </span>
+              <button
+                onClick={handleNewResearch}
+                className="text-[10px] font-bold text-blue-400 hover:text-blue-300 bg-blue-500/10 hover:bg-blue-500/20 px-2 py-0.5 rounded-lg border border-blue-500/30 transition-colors flex items-center gap-1"
+              >
+                <Plus className="w-3 h-3" /> New Topic
+              </button>
+            </div>
+
+            {sessions.length === 0 ? (
+              <p className="text-[11px] text-zinc-500 italic p-2 border border-dashed border-[#334155] rounded-xl text-center">
+                No recent topics saved. Search any topic to begin!
+              </p>
+            ) : (
+              <div className="space-y-1.5 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                {sessions.map(s => {
+                  const isActive = s.id === activeSessionId;
+                  const msgCount = s.messages ? s.messages.length : 0;
+                  const dateStr = new Date(s.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+
+                  return (
+                    <div
+                      key={s.id}
+                      onClick={() => handleSelectSession(s)}
+                      className={`group flex items-center justify-between p-2.5 rounded-xl border text-left cursor-pointer transition-all ${
+                        isActive
+                          ? 'bg-blue-600/20 border-blue-500/50 text-blue-200 font-medium shadow-sm shadow-blue-500/10'
+                          : 'bg-[#1E293B]/70 border-[#334155]/70 text-zinc-300 hover:bg-[#1E293B] hover:border-zinc-700'
+                      }`}
+                    >
+                      <div className="min-w-0 flex-1 pr-2">
+                        <p className="text-xs truncate font-semibold leading-tight">{s.topic}</p>
+                        <div className="flex items-center space-x-2 text-[10px] text-zinc-500 mt-1">
+                          <span>{dateStr}</span>
+                          <span>•</span>
+                          <span>{msgCount} items</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteSession(s.id);
+                        }}
+                        className="opacity-0 group-hover:opacity-100 p-1 text-zinc-500 hover:text-rose-400 transition-opacity"
+                        title="Delete topic history"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           <div className="relative mb-6">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500" />
             <input 
@@ -534,19 +899,45 @@ Provide a quick, laser-focused answer sticking strictly to the topic and directl
             </button>
           </div>
 
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex justify-between items-center mb-3">
             <span className="text-xs text-zinc-400 font-semibold uppercase tracking-wider">Research Sources</span>
             <span className="text-xs text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded-full font-mono">{discoveredResources.length} Extracted</span>
           </div>
 
+          {/* Add custom source URL input */}
+          <div className="flex space-x-2 mb-4">
+            <input 
+              type="url" 
+              placeholder="Paste website link (e.g. https://...)" 
+              value={customLinkInput}
+              onChange={e => setCustomLinkInput(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && handleAddCustomLink()}
+              className="flex-1 bg-[#0F172A] border border-[#334155] rounded-xl px-3 py-1.5 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+            />
+            <button 
+              onClick={handleAddCustomLink}
+              className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center transition-colors"
+            >
+              + Add
+            </button>
+          </div>
+
           {discoveredResources.length === 0 ? (
-            <div className="h-40 flex flex-col items-center justify-center text-zinc-600 space-y-3 border-2 border-dashed border-[#334155] rounded-xl mt-4">
+            <div className="h-40 flex flex-col items-center justify-center text-zinc-600 space-y-3 border-2 border-dashed border-[#334155] rounded-xl mt-2">
               <BookOpen className="w-8 h-8 opacity-50" />
-              <span className="text-xs text-center px-4">Trusted online resources used to generate answers will appear here automatically.</span>
+              <span className="text-xs text-center px-4">Trusted online resources & extracted links used in research will appear here automatically.</span>
             </div>
           ) : (
-            <div className="space-y-3 mt-4">
-              <p className="text-xs text-zinc-500 mb-2">Verified websites used to synthesize your research summary:</p>
+            <div className="space-y-3 mt-2">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] text-zinc-500">Verified websites & reference sources:</p>
+                <button 
+                  onClick={() => setDiscoveredResources([])} 
+                  className="text-[10px] text-zinc-500 hover:text-rose-400 underline"
+                >
+                  Clear All
+                </button>
+              </div>
               {discoveredResources.map((resource, i) => {
                 let domain = resource.uri;
                 try {
@@ -554,25 +945,29 @@ Provide a quick, laser-focused answer sticking strictly to the topic and directl
                 } catch (e) {}
                 
                 return (
-                  <a 
+                  <div 
                     key={i} 
-                    href={resource.uri} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="block bg-[#1E293B] border border-[#334155] hover:border-blue-500/50 hover:bg-[#273449] p-3 rounded-xl transition-all group"
+                    className="block bg-[#1E293B] border border-[#334155] hover:border-blue-500/50 hover:bg-[#273449] p-3 rounded-xl transition-all group relative"
                   >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1 pr-2 min-w-0">
-                        <p className="text-xs font-medium text-blue-400 truncate mb-1">{domain}</p>
-                        <h3 className="text-sm font-semibold text-zinc-200 line-clamp-2 leading-tight group-hover:text-blue-300 transition-colors">{resource.title}</h3>
-                        {resource.snippet && (
-                          <p className="text-xs text-zinc-400 mt-2 line-clamp-2">{resource.snippet}</p>
-                        )}
-                        <p className="text-[10px] text-zinc-600 mt-2 truncate">{resource.uri}</p>
+                    <a 
+                      href={resource.uri} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="block"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1 pr-6 min-w-0">
+                          <p className="text-xs font-medium text-blue-400 truncate mb-1">{domain}</p>
+                          <h3 className="text-xs font-semibold text-zinc-200 line-clamp-2 leading-tight group-hover:text-blue-300 transition-colors">{resource.title}</h3>
+                          {resource.snippet && (
+                            <p className="text-[11px] text-zinc-400 mt-1.5 line-clamp-2">{resource.snippet}</p>
+                          )}
+                          <p className="text-[10px] text-zinc-600 mt-2 truncate">{resource.uri}</p>
+                        </div>
+                        <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-blue-400 flex-shrink-0 mt-1 transition-colors" />
                       </div>
-                      <ArrowRight className="w-4 h-4 text-zinc-500 group-hover:text-blue-400 flex-shrink-0 mt-1 transition-colors" />
-                    </div>
-                  </a>
+                    </a>
+                  </div>
                 );
               })}
             </div>

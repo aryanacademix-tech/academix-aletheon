@@ -28,8 +28,15 @@ async function generateContentProxy(options: any) {
     if (saved) {
       const parsed = JSON.parse(saved);
       apiKey = parsed.apiKey || '';
+      if (!apiKey && parsed.uid) {
+        apiKey = `academix_google_key_${parsed.uid}`;
+      }
     }
   } catch(e) {}
+
+  if (!apiKey) {
+    apiKey = 'academix_auto_key_default';
+  }
 
   const response = await fetch('/api/gemini', {
     method: 'POST',
@@ -109,6 +116,11 @@ export async function generatePuzzle(
   ${contextString}
   
   ${typeInstructions}
+  
+  CRITICAL MATHEMATICAL & SYMBOL NOTATION RULES:
+  1. Use clean, plain text for mathematical formulas, equations, and expressions (e.g., use +, -, ×, ÷, ^, √, =).
+  2. DO NOT use raw LaTeX tags or commands (e.g. do NOT use \\frac, \\sqrt, \\times, \\cdot, etc.). Write fractions as a/b and square roots as √(x).
+  3. CLEAR SYMBOL LEGEND: If any special, non-standard, or arithmetic operation symbol (such as *, ^, ⊕, ⊗, mod, !, #, or custom operators) is used in a problem, you MUST explicitly include a clear explanation or legend right inside the question text clarifying what the symbol demonstrates (e.g., "Note: '^' represents exponentiation (power)", "Note: 'a ⊕ b' means (a × b) + (a + b)", or "Note: 'mod' represents remainder after integer division").
   
   The puzzle should be challenging but logically sound and solvable.
   If it's a multiple choice question, provide exactly 4 options.

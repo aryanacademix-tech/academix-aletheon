@@ -15,15 +15,18 @@ import QuizMasterScreen from './components/QuizMasterScreen';
 import SplashScreen from './components/SplashScreen';
 import OnboardingScreen from './components/OnboardingScreen';
 import ProfileScreen from './components/ProfileScreen';
+import PuzzleSetupScreen from './components/PuzzleSetupScreen';
+import CustomChallengeScreen from './components/CustomChallengeScreen';
 
 import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, isFirestoreSyncEnabled, disableFirestoreSync } from './firebase';
 
 import { calculateLevelInfo } from './utils';
 import { recordTodayPresence } from './utils/dailyTracker';
 
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState<Screen>('splash');
+  const [customConfig, setCustomConfig] = useState<any>(null);
   const [stats, setStats] = useState<UserStats>(() => {
     const saved = localStorage.getItem('synapse_stats');
     if (saved) {
@@ -101,18 +104,27 @@ export default function App() {
     localStorage.setItem('synapse_stats', JSON.stringify(stats));
   }, [stats]);
 
-  // Load from Firestore on mount if uid is present
+  // Auto-generate/ensure in-app API key for any user signed in with Google
+  useEffect(() => {
+    if (stats.uid && (!stats.apiKey || stats.apiKey.trim() === '')) {
+      const autoKey = `academix_google_key_${stats.uid}`;
+      setStats(prev => ({ ...prev, apiKey: autoKey }));
+    }
+  }, [stats.uid, stats.apiKey]);
+
+  // Load from Firestore on mount if uid is present and sync is enabled
   useEffect(() => {
     const loadFromFirebase = async () => {
-      if (stats.uid) {
+      if (stats.uid && db && isFirestoreSyncEnabled()) {
         try {
           const docRef = doc(db, 'users', stats.uid);
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
             setStats(prev => ({ ...prev, ...docSnap.data() as Partial<UserStats> }));
           }
-        } catch (e) {
-          console.error("Error loading stats from Firebase", e);
+        } catch (e: any) {
+          // Gracefully disable cloud synchronization if Firestore database is unprovisioned or unavailable
+          disableFirestoreSync();
         }
       }
     };
@@ -122,12 +134,13 @@ export default function App() {
   // Save to Firestore when stats change
   useEffect(() => {
     const saveToFirebase = async () => {
-      if (stats.uid) {
+      if (stats.uid && db && isFirestoreSyncEnabled()) {
         try {
           const docRef = doc(db, 'users', stats.uid);
           await setDoc(docRef, stats, { merge: true });
-        } catch (e) {
-          console.error("Error saving stats to Firebase", e);
+        } catch (e: any) {
+          // Gracefully disable cloud synchronization if Firestore database is unprovisioned or unavailable
+          disableFirestoreSync();
         }
       }
     };
@@ -137,7 +150,17 @@ export default function App() {
   }, [stats]);
 
   const handleNavigate = (screen: Screen) => {
-    setCurrentScreen(screen);
+    // Override 'play' to go to setup screen first
+    if (screen === 'play') {
+      setCurrentScreen('puzzle-setup');
+    } else {
+      setCurrentScreen(screen);
+    }
+  };
+
+  const handleStartCustomChallenge = (config: any) => {
+    setCustomConfig(config);
+    setCurrentScreen('custom-challenge');
   };
 
   const handleUpdateStats = (newStats: Partial<UserStats>) => {
@@ -268,6 +291,16 @@ export default function App() {
         {currentScreen === 'home' && (
           <motion.div key="home" className="h-full">
             <HomeScreen onNavigate={handleNavigate} stats={stats} />
+          </motion.div>
+        )}
+        {currentScreen === 'puzzle-setup' && (
+          <motion.div key="puzzle-setup" className="h-full">
+            <PuzzleSetupScreen onNavigate={handleNavigate} onStart={handleStartCustomChallenge} />
+          </motion.div>
+        )}
+        {currentScreen === 'custom-challenge' && (
+          <motion.div key="custom-challenge" className="h-full">
+            <CustomChallengeScreen config={customConfig} onNavigate={handleNavigate} onSolve={handleSolve} onSpendCoins={handleSpendCoins} stats={stats} />
           </motion.div>
         )}
         {currentScreen === 'play' && (
