@@ -13,13 +13,13 @@ export const handler = async (event: any, context: any) => {
     };
   }
 
-  const apiKey = process.env.YOUTUBE_API_KEY || process.env.VITE_YOUTUBE_API_KEY || "AIzaSyCsah6dOuAIhZq9r3VotFkvYjYK1gONYLg";
+  const apiKey = process.env.YOUTUBE_API_KEY || process.env.VITE_YOUTUBE_API_KEY || process.env.GEMINI_API_KEY;
 
   if (!apiKey) {
     return {
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ error: 'YOUTUBE_API_KEY_NOT_CONFIGURED', message: 'YouTube API key is not configured on the server.' })
+      body: JSON.stringify({ error: 'YOUTUBE_API_KEY_NOT_CONFIGURED', message: 'YouTube API key is not configured on the server. Set YOUTUBE_API_KEY in environment variables.' })
     };
   }
 

@@ -195,7 +195,7 @@ export default function OnboardingScreen({ onNavigate, onUpdateStats, stats }: O
                       type="password"
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
-                      placeholder="AIzaSy..."
+                      placeholder="Enter Gemini API key..."
                       className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm"
                     />
                   </div>

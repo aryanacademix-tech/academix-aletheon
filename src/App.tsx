@@ -387,7 +387,7 @@ export default function App() {
                     type="password"
                     value={modalApiKeyInput}
                     onChange={(e) => setModalApiKeyInput(e.target.value)}
-                    placeholder="AIzaSy..."
+                    placeholder="Enter Gemini API key..."
                     className="w-full bg-zinc-950 border border-zinc-800 focus:border-yellow-400 rounded-xl px-4 py-3 text-white font-mono text-sm focus:outline-none transition-colors"
                   />
                 </div>
