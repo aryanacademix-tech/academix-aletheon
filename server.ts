@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { handler as geminiHandler } from "./netlify/functions/gemini.js";
+import { handler as youtubeHandler } from "./netlify/functions/youtube.js";
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -69,6 +70,24 @@ async function startServer() {
     } catch (error) {
       console.error("Error in mock Netlify function:", error);
       res.status(500).json({ error: "Internal Server Error" });
+    }
+  });
+
+  // Secure YouTube proxy endpoint to keep API key hidden in backend
+  app.all("/api/youtube", async (req, res) => {
+    try {
+      const event = {
+        httpMethod: req.method,
+        queryStringParameters: req.query,
+        body: JSON.stringify(req.body || {}),
+      };
+      const context = {};
+      const response = await youtubeHandler(event, context);
+      
+      res.status(response.statusCode || 200).send(response.body);
+    } catch (error) {
+      console.error("Error in YouTube API proxy:", error);
+      res.status(500).json({ error: "Failed to proxy YouTube request" });
     }
   });
 

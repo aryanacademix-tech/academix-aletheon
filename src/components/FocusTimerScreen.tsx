@@ -62,8 +62,6 @@ const MOTIVATIONS = [
   "Believe you can and you're halfway there."
 ];
 
-const YOUTUBE_API_KEY = ((import.meta as any).env?.VITE_YOUTUBE_API_KEY as string) || "AIzaSyBsFlrpzaNqw6BSN8HYCONesTMVOwDWt9Y";
-
 export default function FocusTimerScreen({ onNavigate, onActivityComplete }: FocusTimerScreenProps) {
   // Timer Settings
   const [focusTime, setFocusTime] = useState(25 * 60);
@@ -209,7 +207,7 @@ export default function FocusTimerScreen({ onNavigate, onActivityComplete }: Foc
   const [currentVideo, setCurrentVideo] = useState<YTVideo | null>(null);
 
   const [isEditingTime, setIsEditingTime] = useState(false);
-  const [isEditingGoal, setIsEditingGoal] = useState<'weekly' | 'monthly' | null>(null);
+  const [isEditingGoal, setIsEditingGoal] = useState<'weekly' | 'monthly' | 'streak' | null>(null);
 
   const [quote] = useState(MOTIVATIONS[Math.floor(Math.random() * MOTIVATIONS.length)]);
 
@@ -515,7 +513,7 @@ export default function FocusTimerScreen({ onNavigate, onActivityComplete }: Foc
     try {
       if (searchQuery.startsWith('@')) {
         const query = searchQuery.substring(1).trim();
-        const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=15&q=${encodeURIComponent(query)}&type=channel&key=${YOUTUBE_API_KEY}`);
+        const res = await fetch(`/api/youtube?action=search&maxResults=15&q=${encodeURIComponent(query)}&type=channel`);
         const data = await res.json();
         if (data.items) {
           const mapped = data.items.map((item: any) => ({
@@ -529,7 +527,7 @@ export default function FocusTimerScreen({ onNavigate, onActivityComplete }: Foc
           setSearchResults(mapped);
         }
       } else {
-        const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=15&videoDuration=long&q=${encodeURIComponent(searchQuery)}&type=video&key=${YOUTUBE_API_KEY}`);
+        const res = await fetch(`/api/youtube?action=search&maxResults=15&type=video&q=${encodeURIComponent(searchQuery)}`);
         const data = await res.json();
         if (data.items) {
           const mapped = data.items.map((item: any) => ({
@@ -591,7 +589,7 @@ export default function FocusTimerScreen({ onNavigate, onActivityComplete }: Foc
     });
 
     try {
-      const res = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&maxResults=15&videoDuration=long&channelId=${channelId}&type=video&key=${YOUTUBE_API_KEY}`);
+      const res = await fetch(`/api/youtube?action=search&maxResults=15&channelId=${encodeURIComponent(channelId)}`);
       const data = await res.json();
       if (data.items) {
         const mapped = data.items.map((item: any) => ({
@@ -618,7 +616,7 @@ export default function FocusTimerScreen({ onNavigate, onActivityComplete }: Foc
 
     if (!knownThumbnail) {
       try {
-        const res = await fetch(`https://www.googleapis.com/youtube/v3/channels?part=snippet&id=${channelId}&key=${YOUTUBE_API_KEY}`);
+        const res = await fetch(`/api/youtube?action=channel&id=${encodeURIComponent(channelId)}`);
         const data = await res.json();
         if (data.items && data.items.length > 0) {
           const thumb = data.items[0].snippet.thumbnails.default.url;
@@ -646,9 +644,9 @@ export default function FocusTimerScreen({ onNavigate, onActivityComplete }: Foc
 
   const handleSaveGoal = (newMinutes: number) => {
     if (isEditingGoal === 'weekly') {
-      setStats(prev => ({ ...prev, weeklyGoal: newMinutes * 60 }));
+      setStats(prev => ({ ...prev, weeklyGoal: Math.max(60, newMinutes * 60) }));
     } else if (isEditingGoal === 'monthly') {
-      setStats(prev => ({ ...prev, monthlyGoal: newMinutes * 60 }));
+      setStats(prev => ({ ...prev, monthlyGoal: Math.max(60, newMinutes * 60) }));
     }
     setIsEditingGoal(null);
   };
@@ -720,7 +718,12 @@ export default function FocusTimerScreen({ onNavigate, onActivityComplete }: Foc
   const effectiveWeeklyProgress = Math.max(stats.weeklyGoalProgress || 0, calculatedWeeklySecs);
 
   const todayNowObj = new Date();
-  const calculatedMonthlySecs = Object.keys(stats.dailyStudyTime || {}).reduce((acc, dateStr) => {
+  const allMonthlyRecordedDates = Array.from(new Set([
+    ...Object.keys(stats.dailyStudyTime || {}),
+    ...focusHistory.map(h => new Date(h.date).toDateString())
+  ]));
+
+  const calculatedMonthlySecs = allMonthlyRecordedDates.reduce((acc, dateStr) => {
     const d = new Date(dateStr);
     if (!isNaN(d.getTime()) && d.getMonth() === todayNowObj.getMonth() && d.getFullYear() === todayNowObj.getFullYear()) {
       const secondsFromDaily = stats.dailyStudyTime?.[dateStr] || 0;
@@ -793,13 +796,9 @@ export default function FocusTimerScreen({ onNavigate, onActivityComplete }: Foc
 
           <div className="bg-zinc-900/50 p-3 rounded-2xl border border-zinc-800/50 group/streak relative">
             <button 
-              onClick={() => {
-                const num = parseInt(window.prompt("Set Streak Goal (Days):", (stats.streakGoal || 7).toString()) || "7");
-                if (!isNaN(num) && num > 0) {
-                  setStats(prev => ({...prev, streakGoal: num}));
-                }
-              }}
+              onClick={() => setIsEditingGoal('streak')}
               className="absolute top-2 right-2 text-zinc-500 hover:text-orange-400 opacity-0 group-hover/streak:opacity-100 transition-opacity"
+              title="Set Target Streak Days"
             >
               <Settings className="w-3 h-3" />
             </button>
@@ -1314,14 +1313,63 @@ export default function FocusTimerScreen({ onNavigate, onActivityComplete }: Foc
       )}
 
       {/* Goal Dial Picker Modal */}
-      {isEditingGoal && (
+      {isEditingGoal && isEditingGoal !== 'streak' && (
         <TimeDialPicker
           title={`Set ${isEditingGoal === 'weekly' ? 'Weekly' : 'Monthly'} Target Goal (Hours/Mins)`}
           initialValue={Math.floor((isEditingGoal === 'weekly' ? stats.weeklyGoal : stats.monthlyGoal) / 60)}
           onSave={handleSaveGoal}
           onCancel={() => setIsEditingGoal(null)}
-          maxHours={100}
+          maxHours={isEditingGoal === 'weekly' ? 100 : 300}
         />
+      )}
+
+      {/* Streak Goal Modal */}
+      {isEditingGoal === 'streak' && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl space-y-5"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Flame className="w-5 h-5 text-orange-400" />
+                <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-100">Set Streak Target</h3>
+              </div>
+              <span className="text-xs font-mono text-orange-400 bg-orange-500/10 px-2 py-0.5 rounded-full border border-orange-500/20">
+                {stats.streakGoal || 7} Days
+              </span>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2">
+              {[5, 7, 14, 21, 30, 60, 90, 100].map(days => (
+                <button
+                  key={days}
+                  onClick={() => {
+                    setStats(prev => ({ ...prev, streakGoal: days }));
+                    setIsEditingGoal(null);
+                  }}
+                  className={`py-2 rounded-xl text-xs font-mono font-bold transition-all ${
+                    (stats.streakGoal || 7) === days
+                      ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/30'
+                      : 'bg-zinc-800/80 text-zinc-300 hover:bg-zinc-700 hover:text-white border border-zinc-700/50'
+                  }`}
+                >
+                  {days}d
+                </button>
+              ))}
+            </div>
+
+            <div className="pt-2 flex justify-end space-x-3">
+              <button
+                onClick={() => setIsEditingGoal(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-zinc-400 hover:text-white transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </motion.div>
+        </div>
       )}
 
     </div>
