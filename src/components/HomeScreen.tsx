@@ -9,7 +9,7 @@ interface HomeScreenProps {
   stats: UserStats;
 }
 
-import Loader from './Loader';
+import AppLogo from './AppLogo';
 import DeveloperCard from './DeveloperCard';
 
 export default function HomeScreen({ onNavigate, stats }: HomeScreenProps) {
@@ -103,20 +103,9 @@ export default function HomeScreen({ onNavigate, stats }: HomeScreenProps) {
           </div>
         </div>
 
-        {/* Title */}
-        <div className="text-center space-y-2 py-8 flex flex-col items-center">
-          <div className="mb-4">
-            <Loader />
-          </div>
-          <motion.h1 
-            className="text-5xl font-black tracking-tighter bg-gradient-to-br from-white to-zinc-500 bg-clip-text text-transparent"
-            initial={{ scale: 0.9 }}
-            animate={{ scale: 1 }}
-            transition={{ type: "spring", stiffness: 200, damping: 10 }}
-          >
-            Academix Aletheon
-          </motion.h1>
-          <p className="text-zinc-400 text-sm tracking-wide">learn.play.enjoy.repeat</p>
+        {/* Academix Aletheon Logo */}
+        <div className="py-2 flex justify-center">
+          <AppLogo size="md" showTagline={true} />
         </div>
 
         {/* Action Buttons */}

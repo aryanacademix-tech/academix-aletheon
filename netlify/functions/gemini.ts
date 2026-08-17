@@ -1,23 +1,14 @@
 import { GoogleGenAI } from '@google/genai';
 
 function getAI(customApiKey?: string) {
-  const isAutoKey = !customApiKey || 
-                    customApiKey === "MY_GEMINI_API_KEY" || 
-                    customApiKey.startsWith('academix_') || 
-                    customApiKey.startsWith('auto_') || 
-                    customApiKey === 'IN_APP_GOOGLE_KEY';
-  
-  const apiKey = isAutoKey ? process.env.GEMINI_API_KEY : customApiKey;
-  
-  if (!apiKey || apiKey === "MY_GEMINI_API_KEY") {
-    // If still missing, try process.env.GEMINI_API_KEY as final safety net
-    if (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY") {
-      return new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    }
+  const apiKeyToUse = customApiKey || process.env.GEMINI_API_KEY;
+
+  if (!apiKeyToUse || apiKeyToUse === "MY_GEMINI_API_KEY") {
     throw new Error('MISSING_API_KEY');
   }
+
   return new GoogleGenAI({ 
-    apiKey: apiKey,
+    apiKey: apiKeyToUse,
   });
 }
 
@@ -33,6 +24,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Access-Control-Allow-Methods': 'POST, OPTIONS'
 };
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export const handler = async (event: any, context: any) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -55,7 +48,7 @@ export const handler = async (event: any, context: any) => {
     const body = JSON.parse(event.body || '{}');
     const { model, contents, config, apiKey, action, prompt: imgPrompt, imageSize, aspectRatio, topicExtractions, thinkingMode } = body;
 
-    const ai = getAI(apiKey);
+    let ai = getAI(apiKey);
 
     if (action === 'generateImage' || model?.includes('imagen') || model?.includes('image')) {
       let imageRes: any = null;
@@ -111,7 +104,7 @@ export const handler = async (event: any, context: any) => {
       // Fallback to generating SVG infographic using gemini content generation with high detail
       try {
         const svgResponse = await ai.models.generateContent({
-          model: 'gemini-3.1-flash-lite-preview',
+          model: 'gemini-3.6-flash',
           contents: [{
             role: 'user',
             parts: [{ text: `Create a complete, visually stunning, highly detailed modern educational infographic SVG code specifically for the topic: "${imgPrompt}".
@@ -157,6 +150,7 @@ CRITICAL VISUAL & CONTENT REQUIREMENTS:
       'gemini-3.6-flash',
       'gemini-3.1-flash-lite',
       'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
       'gemini-flash-latest'
     ];
     
@@ -164,7 +158,9 @@ CRITICAL VISUAL & CONTENT REQUIREMENTS:
       'gemini-3.1-pro-preview',
       'gemini-3.6-flash',
       'gemini-3.1-flash-lite',
-      'gemini-2.5-flash'
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-lite',
+      'gemini-flash-latest'
     ];
 
     let reqConfig = config || {};
@@ -192,52 +188,82 @@ CRITICAL VISUAL & CONTENT REQUIREMENTS:
     let lastError: any = null;
 
     for (const modelToTry of modelQueue) {
-      try {
-        // Clean thinkingConfig if trying a non-pro model
-        const currentConfig = { ...reqConfig };
-        if (!modelToTry.includes('pro') && currentConfig.thinkingConfig) {
-          delete currentConfig.thinkingConfig;
-        }
-
-        // Try with tools first if specified
+      const maxRetries = 2;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
         try {
-          response = await ai.models.generateContent({
-            model: modelToTry,
-            contents,
-            config: currentConfig
-          });
-        } catch (toolErr: any) {
-          const toolErrStr = String(toolErr?.message || toolErr).toLowerCase();
-          const isQuotaOrRateLimit = toolErrStr.includes('429') || toolErrStr.includes('quota') || toolErrStr.includes('resource_exhausted');
-          
-          if (currentConfig.tools && !isQuotaOrRateLimit) {
-            // Try without tools if tool invocation had a schema/formatting issue
-            const noToolsConfig = { ...currentConfig };
-            delete noToolsConfig.tools;
+          // Clean thinkingConfig if trying a non-pro model
+          const currentConfig = { ...reqConfig };
+          if (!modelToTry.includes('pro') && currentConfig.thinkingConfig) {
+            delete currentConfig.thinkingConfig;
+          }
+
+          // Try with tools first if specified
+          try {
             response = await ai.models.generateContent({
               model: modelToTry,
               contents,
-              config: noToolsConfig
+              config: currentConfig
             });
-          } else {
-            // If it's a 429 quota error, throw immediately to move to the next model in the cascade
-            throw toolErr;
+          } catch (toolErr: any) {
+            const toolErrStr = String(toolErr?.message || toolErr).toLowerCase();
+            const isQuotaOrRateLimit = toolErrStr.includes('429') || toolErrStr.includes('quota') || toolErrStr.includes('resource_exhausted') || toolErrStr.includes('rate limit');
+            
+            if (currentConfig.tools && !isQuotaOrRateLimit) {
+              // Try without tools if tool invocation had a schema/formatting issue
+              const noToolsConfig = { ...currentConfig };
+              delete noToolsConfig.tools;
+              response = await ai.models.generateContent({
+                model: modelToTry,
+                contents,
+                config: noToolsConfig
+              });
+            } else {
+              throw toolErr;
+            }
           }
-        }
 
-        if (response && response.text) {
-          break; // Success!
+          if (response && response.text) {
+            break; // Success!
+          }
+        } catch (err: any) {
+          lastError = err;
+          const errStr = String(err?.message || err).toLowerCase();
+          const isQuotaOrRateLimit = errStr.includes('429') || errStr.includes('quota') || errStr.includes('resource_exhausted') || errStr.includes('rate limit');
+          const isAuthErr = errStr.includes('api_key_invalid') || errStr.includes('invalid api key') || errStr.includes('unauthorized') || errStr.includes('permission_denied') || err.message === 'MISSING_API_KEY';
+
+          if (isAuthErr) {
+            const masterKey = (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== "MY_GEMINI_API_KEY") ? process.env.GEMINI_API_KEY : undefined;
+            if (masterKey) {
+              try {
+                ai = new GoogleGenAI({ apiKey: masterKey });
+                response = await ai.models.generateContent({
+                  model: modelToTry,
+                  contents,
+                  config: reqConfig
+                });
+                if (response && response.text) break;
+              } catch (fallbackErr) {
+                lastError = fallbackErr;
+              }
+            } else {
+              throw err;
+            }
+          }
+
+          if (isQuotaOrRateLimit && attempt < maxRetries - 1) {
+            // Short backoff delay (1s, 2s) to allow shared rate limit bucket to reset
+            await sleep(1000 * (attempt + 1));
+            continue;
+          }
+          break; // Move to next candidate model
         }
-      } catch (err: any) {
-        lastError = err;
-        const errStr = String(err?.message || err).toLowerCase();
-        
-        // If it's auth error or missing key, throw immediately
-        if (errStr.includes('api_key_invalid') || errStr.includes('unauthorized') || err.message === 'MISSING_API_KEY') {
-          throw err;
-        }
-        // For rate limit (429/quota), proceed seamlessly to the next model in queue
       }
+
+      if (response && response.text) {
+        break; // Success!
+      }
+      // Pause briefly before trying next candidate model
+      await sleep(500);
     }
 
     if (!response || !response.text) {

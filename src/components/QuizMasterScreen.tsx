@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, BrainCircuit, Play, Timer, Trophy, CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { ChevronLeft, BrainCircuit, Play, Timer, Trophy, CheckCircle, XCircle, AlertCircle, Loader2, Key, Sparkles, ExternalLink } from 'lucide-react';
 import { Screen } from '../types';
 import { recordSkillActivity } from '../utils/dailyTracker';
 import GeneratingLoader from './GeneratingLoader';
@@ -33,6 +33,112 @@ type Question = {
   explanation: string;
 };
 
+const getFallbackQuiz = (subject: string, count: number): Question[] => {
+  const subjectLower = subject.toLowerCase();
+  let baseQuestions: Question[] = [
+    {
+      question: `In ${subject}, what is a fundamental core principle essential for analytical problem solving?`,
+      options: ["Systematic analysis & logical decomposition", "Random trial without observation", "Ignoring unknown variables", "Memorizing results without theory"],
+      correctAnswer: 0,
+      explanation: "Logical analysis and systematic breakdown are fundamental across all academic and scientific disciplines."
+    },
+    {
+      question: `Which strategy is most effective when encountering a complex problem in ${subject}?`,
+      options: ["Decomposing into smaller, manageable sub-problems", "Skipping fundamental definitions", "Assuming variables remain constant", "Avoiding step-by-step verification"],
+      correctAnswer: 0,
+      explanation: "Decomposing complex problems into smaller sub-problems simplifies structural analysis."
+    },
+    {
+      question: `What role does empirical verification play in study and research in ${subject}?`,
+      options: ["Validating hypotheses and ensuring mathematical rigor", "Replacing theoretical modeling completely", "Slowing down problem solving artificially", "Eliminating peer review"],
+      correctAnswer: 0,
+      explanation: "Empirical verification ensures that conclusions are consistent, reproducible, and mathematically sound."
+    },
+    {
+      question: `In mathematical and logical evaluation, what does applying standard order of operations guarantee?`,
+      options: ["Consistent and unambiguous evaluation of expressions", "Elimination of negative numbers", "Faster calculation speed only", "Simplification of 3D geometry"],
+      correctAnswer: 0,
+      explanation: "Standard order of operations (PEMDAS/BODMAS) guarantees identical expression evaluation everywhere."
+    },
+    {
+      question: `Which tool is most effective in ${subject} to visualize structural dependencies and concepts?`,
+      options: ["Conceptual diagrams, flowcharts, and mind maps", "Unlabeled scatter plots", "Random number tables", "Unstructured text blocks"],
+      correctAnswer: 0,
+      explanation: "Mind maps, flowcharts, and diagrams clarify structural dependencies and logical relationships."
+    }
+  ];
+
+  if (subjectLower.includes('math') || subjectLower.includes('algebra') || subjectLower.includes('arithmetic')) {
+    baseQuestions = [
+      {
+        question: "Evaluate: 8 + 2 × (3² - 4)",
+        options: ["18", "14", "26", "20"],
+        correctAnswer: 0,
+        explanation: "Order of operations: (3² - 4) = 5. 2 × 5 = 10. 8 + 10 = 18."
+      },
+      {
+        question: "If 3x + 7 = 22, what is the value of x?",
+        options: ["5", "4", "6", "3"],
+        correctAnswer: 0,
+        explanation: "3x = 22 - 7 = 15 => x = 5."
+      },
+      {
+        question: "What is the slope of the line given by the equation y = 4x - 9?",
+        options: ["4", "-9", "1/4", "9"],
+        correctAnswer: 0,
+        explanation: "In slope-intercept form y = mx + b, the coefficient m = 4 is the slope."
+      },
+      {
+        question: "What is the sum of the interior angles of a pentagon (5 sides)?",
+        options: ["540°", "360°", "720°", "180°"],
+        correctAnswer: 0,
+        explanation: "Formula: (n - 2) × 180° = (5 - 2) × 180° = 3 × 180° = 540°."
+      },
+      {
+        question: "Which of the following numbers is a prime number?",
+        options: ["29", "27", "33", "35"],
+        correctAnswer: 0,
+        explanation: "29 has no positive divisors other than 1 and itself."
+      }
+    ];
+  } else if (subjectLower.includes('physics') || subjectLower.includes('science') || subjectLower.includes('chemistry')) {
+    baseQuestions = [
+      {
+        question: "According to Newton's Second Law of Motion, net force equals:",
+        options: ["Mass × Acceleration (F = ma)", "Mass ÷ Velocity", "Work × Distance", "Energy × Time"],
+        correctAnswer: 0,
+        explanation: "F = ma directly defines force as mass multiplied by acceleration."
+      },
+      {
+        question: "What is the chemical symbol for Gold?",
+        options: ["Au", "Ag", "Fe", "Cu"],
+        correctAnswer: 0,
+        explanation: "Au comes from the Latin word for gold, 'Aurum'."
+      },
+      {
+        question: "What is the approximate speed of light in a vacuum?",
+        options: ["3 × 10⁸ m/s", "3 × 10⁶ m/s", "1.5 × 10⁸ m/s", "3 × 10¹⁰ m/s"],
+        correctAnswer: 0,
+        explanation: "The speed of light in a vacuum is c ≈ 3 × 10⁸ m/s."
+      },
+      {
+        question: "Which subatomic particle carries a negative electric charge?",
+        options: ["Electron", "Proton", "Neutron", "Positron"],
+        correctAnswer: 0,
+        explanation: "Electrons carry a unit negative charge (-1e)."
+      },
+      {
+        question: "What is the pH value of pure distilled water at 25°C?",
+        options: ["7 (Neutral)", "0 (Strong Acid)", "14 (Strong Base)", "5 (Slightly Acidic)"],
+        correctAnswer: 0,
+        explanation: "Pure water has equal concentrations of H⁺ and OH⁻ ions, yielding pH = 7."
+      }
+    ];
+  }
+
+  return baseQuestions.slice(0, count);
+};
+
 export default function QuizMasterScreen({ onNavigate, onActivityComplete }: QuizMasterScreenProps) {
   const [mode, setMode] = useState<'setup' | 'generating' | 'playing' | 'results' | 'cooldown'>('setup');
   
@@ -53,6 +159,7 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [selectedAnswers, setSelectedAnswers] = useState<number[]>([]);
   const [quizTimer, setQuizTimer] = useState(0);
+  const [missingApiKey, setMissingApiKey] = useState(false);
   
   // Cooldown State
   const [cooldownTime, setCooldownTime] = useState(0);
@@ -127,18 +234,16 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
         const saved = localStorage.getItem('synapse_stats');
         if (saved) {
           const parsed = JSON.parse(saved);
-          apiKey = parsed.apiKey || (parsed.uid ? `academix_google_key_${parsed.uid}` : '');
+          apiKey = parsed.apiKey || '';
         }
-      } catch (e) {}
-
-      if (!apiKey) apiKey = 'academix_auto_key_default';
+      } catch(e) {}
 
       const response = await fetch('/api/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           apiKey,
-          model: 'gemini-3.1-flash-lite-preview',
+          model: 'gemini-3.6-flash',
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           config: {
             temperature: 0.7,
@@ -148,9 +253,16 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
       });
 
       if (!response.ok) {
-        if (response.status === 429) throw new Error('RATE_LIMIT_REACHED');
         if (response.status === 401) throw new Error('MISSING_API_KEY');
-        throw new Error('Failed to generate quiz');
+        // Fallback to offline subject quiz template
+        const activeSub = isCustomMode || subject === 'Custom' ? (customTopicName.trim() || 'Custom Topic') : subject;
+        const fallbackQs = getFallbackQuiz(activeSub, questionsCount);
+        setQuestions(fallbackQs);
+        setSelectedAnswers(new Array(fallbackQs.length).fill(-1));
+        setCurrentQIndex(0);
+        setQuizTimer(timeMin * 60);
+        setMode('playing');
+        return;
       }
       
       const data = await response.json();
@@ -171,10 +283,18 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
       setCurrentQIndex(0);
       setQuizTimer(timeMin * 60);
       setMode('playing');
-    } catch (err) {
-      if (err.message !== 'RATE_LIMIT_REACHED') console.error(err);
-      alert('Failed to generate quiz. Please try again or check your API key quota.');
-      setMode('setup');
+    } catch (err: any) {
+      if (err.message === 'MISSING_API_KEY') {
+        setMissingApiKey(true);
+      } else {
+        const activeSub = isCustomMode || subject === 'Custom' ? (customTopicName.trim() || 'Custom Topic') : subject;
+        const fallbackQs = getFallbackQuiz(activeSub, questionsCount);
+        setQuestions(fallbackQs);
+        setSelectedAnswers(new Array(fallbackQs.length).fill(-1));
+        setCurrentQIndex(0);
+        setQuizTimer(timeMin * 60);
+        setMode('playing');
+      }
     }
   };
 
@@ -250,6 +370,71 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
       </div>
 
       <div className="flex-1 overflow-y-auto pt-24 pb-12 px-6 flex justify-center custom-scrollbar">
+        {missingApiKey ? (
+          <div className="flex flex-col items-center justify-center h-full w-full max-w-md mx-auto">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8 w-full text-center shadow-2xl">
+              <BrainCircuit className="w-16 h-16 text-yellow-400 mx-auto mb-4" />
+              <h2 className="text-2xl font-bold text-white mb-2">Google AI Key Required</h2>
+              <p className="text-zinc-400 mb-6 text-sm">
+                To generate custom quizzes, enter your manual API key from Google AI Studio.
+              </p>
+
+              {/* Highlighted Yellow Box Light Animation Link */}
+              <motion.a 
+                href="https://aistudio.google.com/app/apikey" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="group relative flex items-center justify-between p-3.5 rounded-2xl bg-yellow-500/15 border-2 border-yellow-400 hover:border-yellow-300 text-yellow-100 shadow-[0_0_25px_rgba(234,179,8,0.4)] hover:shadow-[0_0_40px_rgba(234,179,8,0.7)] transition-all duration-300 overflow-hidden cursor-pointer mb-6"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-200/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 pointer-events-none" />
+                <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-amber-300 rounded-2xl blur opacity-30 group-hover:opacity-60 transition duration-500 group-hover:duration-200 animate-pulse pointer-events-none" />
+
+                <div className="flex items-center space-x-3 relative z-10">
+                  <div className="w-9 h-9 rounded-xl bg-yellow-400 text-black flex items-center justify-center font-black shadow-md shadow-yellow-400/40 shrink-0 group-hover:scale-110 transition-transform">
+                    <Key className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-[11px] font-black text-yellow-300 uppercase tracking-wider">Click Here To Get API Key</span>
+                      <Sparkles className="w-3.5 h-3.5 text-yellow-200 animate-bounce" />
+                    </div>
+                    <p className="text-xs font-semibold text-yellow-100/90 leading-tight">
+                      Google AI Studio (Free Manual Key)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-1.5 text-xs font-extrabold text-black bg-yellow-400 hover:bg-yellow-300 px-3 py-1.5 rounded-xl shadow-md shadow-yellow-400/30 z-10 shrink-0 group-hover:translate-x-0.5 transition-all">
+                  <span>Get Key</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </div>
+              </motion.a>
+
+              <p className="text-[11px] text-zinc-400 leading-relaxed bg-zinc-950 p-2.5 rounded-xl border border-zinc-800 my-3 text-left">
+                💡 <strong className="text-zinc-300">Account Note:</strong> Log in with a personal Google account (<code className="text-amber-400 font-mono">@gmail.com</code>). School/work accounts show restriction policies.
+              </p>
+
+              <div className="space-y-3">
+                <button
+                  onClick={() => onNavigate('profile')}
+                  className="w-full bg-yellow-400 hover:bg-yellow-300 text-black font-bold py-3.5 px-6 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg shadow-yellow-400/20"
+                >
+                  <Key className="w-4 h-4" />
+                  <span>Enter API Key in Settings</span>
+                </button>
+                <button
+                  onClick={() => onNavigate('home')}
+                  className="w-full bg-zinc-800 hover:bg-zinc-700 text-white font-medium py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  <span>Back to Home</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
         <AnimatePresence mode="wait">
           {mode === 'setup' && (
             <motion.div 
@@ -669,6 +854,7 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
             </motion.div>
           )}
         </AnimatePresence>
+        )}
       </div>
       
     </div>

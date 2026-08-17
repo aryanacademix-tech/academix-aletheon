@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { motion } from 'motion/react';
 import { Screen, UserStats } from '../types';
 import Loader from './Loader';
+import AppLogo from './AppLogo';
 
 interface SplashScreenProps {
   onNavigate: (screen: Screen) => void;
@@ -11,7 +12,7 @@ interface SplashScreenProps {
 export default function SplashScreen({ onNavigate, stats }: SplashScreenProps) {
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (stats.uid && stats.apiKey && stats.name) {
+      if (stats.uid && stats.name && stats.apiKey) {
         onNavigate('home');
       } else {
         onNavigate('onboarding');
@@ -31,17 +32,10 @@ export default function SplashScreen({ onNavigate, stats }: SplashScreenProps) {
         initial={{ scale: 0.8 }}
         animate={{ scale: 1 }}
         transition={{ type: "spring", stiffness: 200, damping: 20 }}
-        className="flex flex-col items-center"
+        className="flex flex-col items-center max-w-xs w-full"
       >
+        <AppLogo size="lg" showTagline={true} className="mb-4" />
         <Loader />
-        <motion.h1 
-          className="mt-8 text-4xl font-black tracking-tighter bg-gradient-to-br from-white to-zinc-500 bg-clip-text text-transparent"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          Academix Aletheon
-        </motion.h1>
       </motion.div>
     </motion.div>
   );

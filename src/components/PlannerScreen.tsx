@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { ChevronLeft, Plus, Clock, Calendar as CalendarIcon, Trash2, ListTodo, LogIn, Loader2, Star } from 'lucide-react';
+import { ChevronLeft, Plus, Clock, Calendar as CalendarIcon, Trash2, ListTodo, LogIn, Loader2, Star, ShieldAlert, HelpCircle, CheckCircle2, X, ExternalLink } from 'lucide-react';
 import { Screen } from '../types';
 import { initAuth, googleSignIn, getAccessToken, logout } from '../lib/auth';
 import { User } from 'firebase/auth';
@@ -43,6 +43,7 @@ export default function PlannerScreen({ onNavigate, onActivityComplete }: Planne
   const [needsAuth, setNeedsAuth] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [showUnverifiedGuide, setShowUnverifiedGuide] = useState(false);
   
   const [isAdding, setIsAdding] = useState(false);
   const [title, setTitle] = useState('');
@@ -94,12 +95,18 @@ export default function PlannerScreen({ onNavigate, onActivityComplete }: Planne
       const res = await fetch('https://tasks.googleapis.com/tasks/v1/lists/@default/tasks?showCompleted=true&showHidden=true', {
         headers: { Authorization: `Bearer ${token}` }
       });
+      if (res.status === 401 || res.status === 403) {
+        console.warn('Tasks API auth error - clearing stale token');
+        localStorage.removeItem('synapse_gtoken');
+        setNeedsAuth(true);
+        return;
+      }
       const data = await res.json();
       if (data.items) {
         setTasks(data.items);
       }
     } catch (e) {
-      console.error(e);
+      console.error('Error fetching Google tasks:', e);
     } finally {
       setIsLoading(false);
     }
@@ -328,18 +335,41 @@ export default function PlannerScreen({ onNavigate, onActivityComplete }: Planne
           <>
             {/* Sync Notice if Not Logged In */}
             {!user && (
-              <div className="bg-zinc-900/80 border border-zinc-800 p-3.5 rounded-2xl flex items-center justify-between gap-3 text-xs">
-                <div className="flex items-center space-x-2.5 text-zinc-300">
-                  <ListTodo className="w-4 h-4 text-emerald-400 shrink-0" />
-                  <span>Local Planner Mode (Sign in to sync with Google Tasks & Calendar)</span>
+              <div className="bg-zinc-900/90 border border-emerald-500/30 p-4 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs shadow-lg shadow-emerald-500/5">
+                <div className="flex items-start space-x-3 text-zinc-300">
+                  <ListTodo className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-zinc-100 text-sm mb-0.5">Google Tasks & Calendar Sync</p>
+                    <p className="text-zinc-400 text-xs">
+                      Sign in to sync your tasks and schedule events directly to your Google Account.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowUnverifiedGuide(true)}
+                      className="mt-2 text-emerald-400 hover:text-emerald-300 font-medium inline-flex items-center space-x-1 underline underline-offset-2"
+                    >
+                      <HelpCircle className="w-3.5 h-3.5 mr-1" />
+                      <span>Seeing "Google hasn't verified this app"? How to proceed</span>
+                    </button>
+                  </div>
                 </div>
-                <button
-                  onClick={handleLogin}
-                  disabled={isLoggingIn}
-                  className="px-3 py-1 bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 border border-emerald-500/30 rounded-lg font-medium transition-colors whitespace-nowrap shrink-0"
-                >
-                  {isLoggingIn ? 'Connecting...' : 'Sign In'}
-                </button>
+                <div className="flex items-center space-x-2 shrink-0 self-end md:self-center">
+                  <button
+                    onClick={() => setShowUnverifiedGuide(true)}
+                    className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-lg font-medium transition-colors flex items-center space-x-1"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5" />
+                    <span>Guide</span>
+                  </button>
+                  <button
+                    onClick={handleLogin}
+                    disabled={isLoggingIn}
+                    className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-xl transition-all shadow-md shadow-emerald-500/20 whitespace-nowrap flex items-center space-x-1.5"
+                  >
+                    {isLoggingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+                    <span>Sign In with Google</span>
+                  </button>
+                </div>
               </div>
             )}
             {/* Score & Stats */}
@@ -588,6 +618,89 @@ export default function PlannerScreen({ onNavigate, onActivityComplete }: Planne
             onSave={saveTaskDetails}
             onDelete={() => deleteTask(editingTask.id)}
           />
+        )}
+      </AnimatePresence>
+
+      {/* Unverified App Guide Modal */}
+      <AnimatePresence>
+        {showUnverifiedGuide && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl relative text-zinc-100"
+            >
+              <button
+                onClick={() => setShowUnverifiedGuide(false)}
+                className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-white bg-zinc-800/60 hover:bg-zinc-800 rounded-full transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-400">
+                  <ShieldAlert className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white">Google Auth & "Unverified App" Guide</h3>
+                  <p className="text-xs text-zinc-400">How to proceed when signing in to enable Google Tasks & Calendar sync</p>
+                </div>
+              </div>
+
+              <div className="space-y-3 text-xs text-zinc-300 my-4 bg-zinc-950 p-4 rounded-xl border border-zinc-800/80">
+                <div className="flex items-start space-x-2.5">
+                  <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center shrink-0 text-xs mt-0.5">1</span>
+                  <div>
+                    <p className="font-semibold text-white">Click "Advanced" on the Google Prompt</p>
+                    <p className="text-zinc-400 text-[11px]">
+                      When Google displays <i>"Google hasn't verified this app"</i>, click the <strong className="text-amber-300">Advanced</strong> link at the bottom-left of the consent window.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border-t border-zinc-800/60 pt-2.5 flex items-start space-x-2.5">
+                  <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center shrink-0 text-xs mt-0.5">2</span>
+                  <div>
+                    <p className="font-semibold text-white">Click "Go to Academix (unsafe)" / "Continue"</p>
+                    <p className="text-zinc-400 text-[11px]">
+                      Click the bottom link that says <strong className="text-amber-300">Go to Academix (unsafe)</strong> to proceed to authorization. This warning appears because the app is running in AI Studio developer mode.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="border-t border-zinc-800/60 pt-2.5 flex items-start space-x-2.5">
+                  <span className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center shrink-0 text-xs mt-0.5">3</span>
+                  <div>
+                    <p className="font-semibold text-white">Grant Google Calendar & Tasks Permissions</p>
+                    <p className="text-zinc-400 text-[11px]">
+                      Check the boxes to allow access to <strong className="text-emerald-300">Google Calendar events</strong> and <strong className="text-emerald-300">Google Tasks</strong>, then click <strong className="text-emerald-300">Continue</strong>.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end space-x-3 pt-2">
+                <button
+                  onClick={() => setShowUnverifiedGuide(false)}
+                  className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded-xl text-xs font-medium transition-colors"
+                >
+                  Got It
+                </button>
+                <button
+                  onClick={() => {
+                    setShowUnverifiedGuide(false);
+                    handleLogin();
+                  }}
+                  disabled={isLoggingIn}
+                  className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold rounded-xl text-xs transition-all shadow-lg shadow-emerald-500/20 flex items-center space-x-1.5"
+                >
+                  {isLoggingIn ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+                  <span>Sign In with Google Now</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
         )}
       </AnimatePresence>
 

@@ -289,20 +289,6 @@ export default function KeenResearchersScreen({ onNavigate, onActivityComplete }
   // Studio tabs & specialized state
   const [activeStudioTab, setActiveStudioTab] = useState<'tools' | 'mindmap' | 'study_deck'>('tools');
   
-  // User API key state
-  const [userApiKey, setUserApiKey] = useState<string>(() => {
-    try {
-      const saved = localStorage.getItem('synapse_stats');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        return parsed.apiKey || (parsed.uid ? `academix_google_key_${parsed.uid}` : 'academix_auto_key_default');
-      }
-    } catch(e) {}
-    return 'academix_auto_key_default';
-  });
-  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
-  const [tempApiKeyInput, setTempApiKeyInput] = useState('');
-
   const handleAddCustomLink = () => {
     if (!customLinkInput.trim()) return;
     let uri = customLinkInput.trim();
@@ -538,19 +524,6 @@ The final output should feel like a premium AI-generated study guide. The learne
     return [];
   };
 
-  // Helper to save API Key to local storage
-  const handleSaveApiKey = (keyToSave: string) => {
-    const trimmed = keyToSave.trim();
-    setUserApiKey(trimmed);
-    try {
-      const saved = localStorage.getItem('synapse_stats');
-      const parsed = saved ? JSON.parse(saved) : {};
-      parsed.apiKey = trimmed;
-      localStorage.setItem('synapse_stats', JSON.stringify(parsed));
-    } catch (e) {}
-    setShowApiKeyModal(false);
-  };
-
   const handleSend = async (customPrompt?: string, msgType?: Message['type']) => {
     if (cooldownTimer > 0) {
       alert(`Please wait ${cooldownTimer} seconds for the API rate limit cooldown before sending another request.`);
@@ -585,11 +558,20 @@ Provide a quick, laser-focused answer sticking strictly to the topic and directl
 - Immediately state the core answer or essential facts clearly.`;
       }
 
+      let apiKey = '';
+      try {
+        const saved = localStorage.getItem('synapse_stats');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          apiKey = parsed.apiKey || '';
+        }
+      } catch (e) {}
+
       const response = await fetch('/api/gemini', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          apiKey: userApiKey,
+          apiKey,
           model: researchStyle === 'deep' ? 'gemini-3.1-pro-preview' : 'gemini-3.6-flash',
           thinkingMode: researchStyle === 'deep',
           contents: [
@@ -736,11 +718,11 @@ Provide a quick, laser-focused answer sticking strictly to the topic and directl
           (data.error && (data.error.includes('429') || data.error.includes('quota') || data.error.includes('RESOURCE_EXHAUSTED') || data.error.includes('rate limit')));
 
         if (isRateLimit) {
-          setCooldownTimer(5); // Reduce to 5 seconds so they aren't blocked for 60s
+          setCooldownTimer(3); // 3 seconds cooldown
           setMessages(prev => [...prev, {
             id: (Date.now() + 1).toString(),
             role: 'assistant',
-            content: `⏳ **Gemini API Rate Limit Reached**\n\nThe free shared API quota was exceeded. Please wait a few seconds and try again.\n\n* **Tip:** Enter your own custom Gemini API key in **Settings / Custom API Key** (top right) to bypass shared limits!`,
+            content: `⏳ **Shared Gemini API Quota Temporarily Busy**\n\nThe free shared API rate limit was temporarily reached. It resets automatically in a few seconds. Click below or send your prompt again!`,
             executionTime: totalSec
           }]);
         } else {

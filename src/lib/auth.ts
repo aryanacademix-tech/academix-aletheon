@@ -108,39 +108,64 @@ export const createGoogleCalendarEvent = async (eventDetails: {
 }): Promise<{ success: boolean; htmlLink?: string; error?: string }> => {
   const token = await getAccessToken();
   if (!token) {
-    return { success: false, error: 'Not authenticated with Google' };
+    return { success: false, error: 'Not authenticated with Google. Please click Sign In with Google.' };
   }
 
   try {
-    let start: Date;
-    if (eventDetails.dueDate) {
-      if (eventDetails.dueTime) {
-        start = new Date(`${eventDetails.dueDate}T${eventDetails.dueTime}:00`);
-      } else {
-        start = new Date(eventDetails.dueDate);
-      }
+    const userTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    let body: any;
+
+    if (eventDetails.dueDate && !eventDetails.dueTime) {
+      // All-day event
+      body = {
+        summary: eventDetails.summary,
+        description: eventDetails.description || 'Created via Academix Aletheon Planner',
+        start: {
+          date: eventDetails.dueDate,
+        },
+        end: {
+          date: eventDetails.dueDate,
+        }
+      };
     } else {
-      start = new Date();
-    }
-
-    if (isNaN(start.getTime())) {
-      start = new Date();
-    }
-
-    const end = new Date(start.getTime() + 3600000); // 1 hour duration default
-
-    const body = {
-      summary: eventDetails.summary,
-      description: eventDetails.description || 'Created via Academix Aletheon Planner',
-      start: {
-        dateTime: start.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
-      },
-      end: {
-        dateTime: end.toISOString(),
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+      let start: Date;
+      if (eventDetails.dueDate && eventDetails.dueTime) {
+        start = new Date(`${eventDetails.dueDate}T${eventDetails.dueTime}:00`);
+      } else if (eventDetails.dueDate) {
+        start = new Date(`${eventDetails.dueDate}T09:00:00`);
+      } else {
+        start = new Date();
       }
-    };
+
+      if (isNaN(start.getTime())) {
+        start = new Date();
+      }
+
+      const end = new Date(start.getTime() + 3600000); // 1 hour duration default
+
+      // Format ISO with local timezone offset
+      const formatWithOffset = (d: Date) => {
+        const pad = (n: number) => String(n).padStart(2, '0');
+        const tzo = -d.getTimezoneOffset();
+        const dif = tzo >= 0 ? '+' : '-';
+        const offHours = pad(Math.floor(Math.abs(tzo) / 60));
+        const offMins = pad(Math.abs(tzo) % 60);
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:00${dif}${offHours}:${offMins}`;
+      };
+
+      body = {
+        summary: eventDetails.summary,
+        description: eventDetails.description || 'Created via Academix Aletheon Planner',
+        start: {
+          dateTime: formatWithOffset(start),
+          timeZone: userTimeZone
+        },
+        end: {
+          dateTime: formatWithOffset(end),
+          timeZone: userTimeZone
+        }
+      };
+    }
 
     const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
       method: 'POST',
@@ -155,10 +180,58 @@ export const createGoogleCalendarEvent = async (eventDetails: {
     if (res.ok && data.id) {
       return { success: true, htmlLink: data.htmlLink };
     } else {
-      return { success: false, error: data.error?.message || 'Failed to create calendar event' };
+      if (res.status === 401 || res.status === 403) {
+        cachedAccessToken = null;
+        localStorage.removeItem('synapse_gtoken');
+      }
+      return { success: false, error: data.error?.message || `Google API Error (${res.status}): ${data.error?.status || 'Failed to sync'}` };
     }
   } catch (err: any) {
     return { success: false, error: err.message || 'Network error syncing calendar' };
+  }
+};
+
+export const createGoogleTask = async (taskDetails: {
+  title: string;
+  notes?: string;
+  dueDate?: string;
+}): Promise<{ success: boolean; error?: string }> => {
+  const token = await getAccessToken();
+  if (!token) {
+    return { success: false, error: 'Not authenticated with Google. Please sign in.' };
+  }
+
+  try {
+    const body: any = {
+      title: taskDetails.title,
+      notes: taskDetails.notes || 'Created via Academix Aletheon Planner',
+    };
+
+    if (taskDetails.dueDate) {
+      body.due = new Date(taskDetails.dueDate).toISOString();
+    }
+
+    const res = await fetch('https://tasks.googleapis.com/tasks/v1/lists/@default/tasks', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+
+    const data = await res.json();
+    if (res.ok && data.id) {
+      return { success: true };
+    } else {
+      if (res.status === 401 || res.status === 403) {
+        cachedAccessToken = null;
+        localStorage.removeItem('synapse_gtoken');
+      }
+      return { success: false, error: data.error?.message || `Google Tasks Error (${res.status})` };
+    }
+  } catch (err: any) {
+    return { success: false, error: err.message || 'Network error syncing task' };
   }
 };
 

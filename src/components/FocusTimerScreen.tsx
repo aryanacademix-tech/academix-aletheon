@@ -62,7 +62,7 @@ const MOTIVATIONS = [
   "Believe you can and you're halfway there."
 ];
 
-const YOUTUBE_API_KEY = "AIzaSyBsFlrpzaNqw6BSN8HYCONesTMVOwDWt9Y";
+const YOUTUBE_API_KEY = ((import.meta as any).env?.VITE_YOUTUBE_API_KEY as string) || "AIzaSyBsFlrpzaNqw6BSN8HYCONesTMVOwDWt9Y";
 
 export default function FocusTimerScreen({ onNavigate, onActivityComplete }: FocusTimerScreenProps) {
   // Timer Settings

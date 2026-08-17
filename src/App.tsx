@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Clock } from 'lucide-react';
+import { Clock, Key, Sparkles, ExternalLink, X } from 'lucide-react';
 import { Screen, UserStats } from './types';
 import HomeScreen from './components/HomeScreen';
 import PuzzleScreen from './components/PuzzleScreen';
@@ -49,24 +49,32 @@ export default function App() {
     };
   });
 
-  const [rateLimitEndsAt, setRateLimitEndsAt] = useState<number | null>(() => {
-    const saved = localStorage.getItem('rateLimitEndsAt');
-    if (saved && parseInt(saved) > Date.now()) {
-      return parseInt(saved);
-    }
-    return null;
-  });
+  // Clear any old rate limit timestamp on app startup to prevent false positive popups
+  useEffect(() => {
+    localStorage.removeItem('rateLimitEndsAt');
+  }, []);
+
+  const [rateLimitEndsAt, setRateLimitEndsAt] = useState<number | null>(null);
   const [showRateLimitPopup, setShowRateLimitPopup] = useState(false);
   const [rateLimitTimeLeft, setRateLimitTimeLeft] = useState(0);
 
+  const [showApiKeyModal, setShowApiKeyModal] = useState(false);
+  const [modalApiKeyInput, setModalApiKeyInput] = useState('');
+
+  useEffect(() => {
+    const handleMissingKey = () => {
+      setModalApiKeyInput(stats.apiKey || '');
+      setShowApiKeyModal(true);
+    };
+    window.addEventListener('missing_api_key_requested', handleMissingKey);
+    return () => window.removeEventListener('missing_api_key_requested', handleMissingKey);
+  }, [stats.apiKey]);
+
   useEffect(() => {
     const handleRateLimit = () => {
-      const endsAt = Date.now() + 60000; // 60 seconds
+      const endsAt = Date.now() + 3000; // 3 seconds
       setRateLimitEndsAt(endsAt);
-      localStorage.setItem('rateLimitEndsAt', endsAt.toString());
-      if (currentScreen !== 'home') {
-        setShowRateLimitPopup(true);
-      }
+      setShowRateLimitPopup(true);
     };
     window.addEventListener('api_rate_limit_reached', handleRateLimit);
     return () => window.removeEventListener('api_rate_limit_reached', handleRateLimit);
@@ -103,14 +111,6 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('synapse_stats', JSON.stringify(stats));
   }, [stats]);
-
-  // Auto-generate/ensure in-app API key for any user signed in with Google
-  useEffect(() => {
-    if (stats.uid && (!stats.apiKey || stats.apiKey.trim() === '')) {
-      const autoKey = `academix_google_key_${stats.uid}`;
-      setStats(prev => ({ ...prev, apiKey: autoKey }));
-    }
-  }, [stats.uid, stats.apiKey]);
 
   // Load from Firestore on mount if uid is present and sync is enabled
   useEffect(() => {
@@ -351,35 +351,146 @@ export default function App() {
       </AnimatePresence>
 
       <AnimatePresence>
-        {showRateLimitPopup && rateLimitEndsAt && (
+        {showApiKeyModal && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-zinc-950/80 backdrop-blur-sm"
+            className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-zinc-950/85 backdrop-blur-md"
           >
             <motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
-              className="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 md:p-8 max-w-sm w-full text-center flex flex-col items-center shadow-2xl shadow-red-500/10"
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-zinc-900 border border-amber-500/30 rounded-3xl p-6 md:p-8 max-w-md w-full relative shadow-2xl shadow-amber-500/10"
             >
-              <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center border border-red-500/30 mb-6">
-                <Clock className="w-8 h-8 text-red-500" />
+              <button 
+                onClick={() => setShowApiKeyModal(false)}
+                className="absolute top-4 right-4 text-zinc-400 hover:text-white p-2 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="w-14 h-14 bg-amber-500/20 rounded-2xl flex items-center justify-center border border-amber-500/40 mb-4">
+                <Key className="w-7 h-7 text-amber-400" />
               </div>
-              <h2 className="text-xl font-bold text-white mb-2">API Rate Limit Reached</h2>
-              <p className="text-zinc-400 text-sm mb-6">
-                You've hit the rate limit for your API key. Please wait before using AI features again.
+
+              <h2 className="text-xl font-bold text-white mb-1">Google AI Studio Key Required</h2>
+              <p className="text-zinc-400 text-xs mb-5 leading-relaxed">
+                Enter your manual Gemini API key to activate AI features. Multiple free models (Gemini 3.6 Flash, Flash Lite, etc.) will automatically be used with fallback.
               </p>
-              <div className="text-4xl font-mono text-red-400 font-bold mb-8">
-                {rateLimitTimeLeft}s
+
+              <div className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider block mb-1.5">Paste Custom API Key</label>
+                  <input
+                    type="password"
+                    value={modalApiKeyInput}
+                    onChange={(e) => setModalApiKeyInput(e.target.value)}
+                    placeholder="AIzaSy..."
+                    className="w-full bg-zinc-950 border border-zinc-800 focus:border-yellow-400 rounded-xl px-4 py-3 text-white font-mono text-sm focus:outline-none transition-colors"
+                  />
+                </div>
+
+                {/* Highlighted Yellow Box Light Animation Link */}
+                <motion.a 
+                  href="https://aistudio.google.com/app/apikey" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className="group relative flex items-center justify-between p-3.5 rounded-2xl bg-yellow-500/15 border-2 border-yellow-400 hover:border-yellow-300 text-yellow-100 shadow-[0_0_25px_rgba(234,179,8,0.4)] hover:shadow-[0_0_40px_rgba(234,179,8,0.7)] transition-all duration-300 overflow-hidden cursor-pointer block my-2"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-200/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 pointer-events-none" />
+                  <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-amber-300 rounded-2xl blur opacity-30 group-hover:opacity-60 transition duration-500 group-hover:duration-200 animate-pulse pointer-events-none" />
+
+                  <div className="flex items-center space-x-3 relative z-10">
+                    <div className="w-8 h-8 rounded-xl bg-yellow-400 text-black flex items-center justify-center font-black shadow-md shadow-yellow-400/40 shrink-0 group-hover:scale-110 transition-transform">
+                      <Key className="w-4 h-4" />
+                    </div>
+                    <div className="text-left">
+                      <div className="flex items-center space-x-1">
+                        <span className="text-[10px] font-black text-yellow-300 uppercase tracking-wider">Click Here To Get API Key</span>
+                        <Sparkles className="w-3 h-3 text-yellow-200 animate-bounce" />
+                      </div>
+                      <p className="text-[11px] font-semibold text-yellow-100/90 leading-tight">
+                        Google AI Studio (Free Manual Key)
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center space-x-1 text-[11px] font-extrabold text-black bg-yellow-400 hover:bg-yellow-300 px-2.5 py-1.5 rounded-xl shadow-md shadow-yellow-400/30 z-10 shrink-0 group-hover:translate-x-0.5 transition-all">
+                    <span>Get Key</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </div>
+                </motion.a>
+
+                <p className="text-[11px] text-zinc-400 leading-relaxed bg-zinc-950 p-2.5 rounded-xl border border-zinc-800 my-1">
+                  💡 <strong className="text-zinc-300">Account Note:</strong> Use a personal Google account (<code className="text-amber-400 font-mono">@gmail.com</code>). School/work accounts show Google policy restrictions.
+                </p>
+
+                <div className="flex gap-2 pt-2">
+                  <button
+                    onClick={() => setShowApiKeyModal(false)}
+                    className="flex-1 py-3 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 font-bold rounded-xl text-xs transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (modalApiKeyInput.trim()) {
+                        handleUpdateStats({ apiKey: modalApiKeyInput.trim() });
+                        setShowApiKeyModal(false);
+                      }
+                    }}
+                    disabled={!modalApiKeyInput.trim()}
+                    className="flex-1 py-3 bg-yellow-400 hover:bg-yellow-300 disabled:opacity-50 text-black font-extrabold rounded-xl text-xs transition-colors shadow-lg shadow-yellow-400/20"
+                  >
+                    Save & Continue
+                  </button>
+                </div>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {showRateLimitPopup && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-[100] w-[92%] max-w-md bg-zinc-900/95 border border-amber-500/30 rounded-2xl p-4 shadow-xl shadow-amber-500/10 backdrop-blur-md flex items-center justify-between gap-3 text-left"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-amber-500/20 rounded-xl flex items-center justify-center shrink-0 border border-amber-500/30">
+                <Clock className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                  Gemini API Quota Busy
+                  {rateLimitTimeLeft > 0 && <span className="text-xs text-amber-400 font-mono">({rateLimitTimeLeft}s)</span>}
+                </h4>
+                <p className="text-zinc-400 text-xs">Auto-resets in seconds or use your own free key.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => {
+                  setShowRateLimitPopup(false);
+                  setModalApiKeyInput(stats.apiKey || '');
+                  setShowApiKeyModal(true);
+                }}
+                className="px-3 py-1.5 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-medium rounded-lg text-xs border border-amber-500/40 transition"
+              >
+                Key
+              </button>
               <button
                 onClick={() => setShowRateLimitPopup(false)}
-                className="w-full py-3 bg-zinc-800 hover:bg-zinc-700 text-white font-medium rounded-xl transition-colors"
+                className="px-2 py-1.5 text-zinc-400 hover:text-zinc-200 text-xs font-bold"
               >
-                Dismiss
+                ✕
               </button>
-            </motion.div>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

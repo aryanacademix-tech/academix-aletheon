@@ -1,4 +1,5 @@
 import express from "express";
+import path from "path";
 import { createServer as createViteServer } from "vite";
 import { handler as geminiHandler } from "./netlify/functions/gemini.js";
 import dotenv from "dotenv";
@@ -10,6 +11,49 @@ async function startServer() {
   const PORT = 3000;
 
   app.use(express.json());
+
+  // CORS middleware for PWA validators and external tools
+  app.use((req, res, next) => {
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    if (req.method === "OPTIONS") {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
+  // Explicitly serve static public assets (icons, manifest, screenshots) with proper caching and types
+  const publicPath = path.join(process.cwd(), 'public');
+  app.use('/.well-known/web-app-origin-association', (req, res) => {
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.sendFile(path.join(publicPath, '.well-known', 'web-app-origin-association'));
+  });
+
+  app.use(express.static(publicPath, {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('manifest.json')) {
+        res.setHeader('Content-Type', 'application/manifest+json; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      } else if (filePath.endsWith('sw.js')) {
+        res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        res.setHeader('Service-Worker-Allowed', '/');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      } else if (filePath.endsWith('.png')) {
+        res.setHeader('Content-Type', 'image/png');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else if (filePath.endsWith('.svg')) {
+        res.setHeader('Content-Type', 'image/svg+xml');
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else if (filePath.endsWith('web-app-origin-association')) {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      } else if (filePath.endsWith('.json')) {
+        res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      }
+      res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+  }));
 
   // Mock Netlify Function endpoint for local development
   app.post("/api/gemini", async (req, res) => {
@@ -36,7 +80,6 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    const path = await import("path");
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
     app.get('*', (req, res) => {

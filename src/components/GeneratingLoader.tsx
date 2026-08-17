@@ -1,20 +1,34 @@
 import React from 'react';
 import styled from 'styled-components';
 
-const GeneratingLoader = () => {
+interface GeneratingLoaderProps {
+  progress?: number;
+  text?: string;
+}
+
+const GeneratingLoader: React.FC<GeneratingLoaderProps> = ({ progress, text }) => {
   return (
     <StyledWrapper>
       <div className="loader-wrapper">
-        <span className="loader-letter">G</span>
-        <span className="loader-letter">e</span>
-        <span className="loader-letter">n</span>
-        <span className="loader-letter">e</span>
-        <span className="loader-letter">r</span>
-        <span className="loader-letter">a</span>
-        <span className="loader-letter">t</span>
-        <span className="loader-letter">i</span>
-        <span className="loader-letter">n</span>
-        <span className="loader-letter">g</span>
+        {progress !== undefined ? (
+          <div className="flex flex-col items-center justify-center z-10">
+            <span className="text-3xl font-black font-mono text-white tracking-tight drop-shadow-md">{Math.round(progress)}%</span>
+            <span className="text-[10px] font-semibold text-indigo-200 uppercase tracking-widest mt-0.5">{text || 'GENERATING'}</span>
+          </div>
+        ) : (
+          <>
+            <span className="loader-letter">G</span>
+            <span className="loader-letter">e</span>
+            <span className="loader-letter">n</span>
+            <span className="loader-letter">e</span>
+            <span className="loader-letter">r</span>
+            <span className="loader-letter">a</span>
+            <span className="loader-letter">t</span>
+            <span className="loader-letter">i</span>
+            <span className="loader-letter">n</span>
+            <span className="loader-letter">g</span>
+          </>
+        )}
         <div className="loader" />
       </div>
     </StyledWrapper>

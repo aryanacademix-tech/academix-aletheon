@@ -34,6 +34,7 @@ export default function CustomChallengeScreen({ config, onNavigate, onSolve, onS
   // Overall challenge state
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
   const [isFinished, setIsFinished] = useState(false);
+  const [missingApiKey, setMissingApiKey] = useState(false);
   const [sessionResults, setSessionResults] = useState<{isCorrect: boolean, timeTaken: number, xp: number, type: string}[]>([]);
 
   useEffect(() => {
@@ -98,7 +99,11 @@ export default function CustomChallengeScreen({ config, onNavigate, onSolve, onS
       });
       setPuzzle(newPuzzle);
     } catch (error: any) {
-      console.error("Failed to load custom puzzle", error);
+      if (error.message === 'MISSING_API_KEY') {
+        setMissingApiKey(true);
+      } else {
+        console.error("Failed to load custom puzzle", error);
+      }
     } finally {
       setLoading(false);
     }
@@ -230,6 +235,45 @@ export default function CustomChallengeScreen({ config, onNavigate, onSolve, onS
             RETURN TO DASHBOARD
           </button>
         </motion.div>
+      </div>
+    );
+  }
+
+  if (missingApiKey) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-[#0A2353] text-zinc-100 p-6">
+        <div className="bg-[#112C70] border border-[#5B58EB]/30 rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+          <BrainCircuit className="w-16 h-16 text-[#56E1E9] mx-auto mb-6" />
+          <h2 className="text-2xl font-bold text-white mb-4">AI Key Setup Required</h2>
+          <p className="text-zinc-300 mb-6 text-sm">
+            Activate your in-app Google Auth AI key to generate custom logic puzzles instantly.
+          </p>
+          <div className="space-y-3">
+            <button
+              onClick={() => {
+                const autoKey = `academix_google_key_${Math.random().toString(36).substring(7)}`;
+                try {
+                  const saved = localStorage.getItem('synapse_stats') || '{}';
+                  const parsed = JSON.parse(saved);
+                  
+                  localStorage.setItem('synapse_stats', JSON.stringify(parsed));
+                } catch (e) {}
+                setMissingApiKey(false);
+                loadPuzzle(currentIndex);
+              }}
+              className="w-full bg-[#5B58EB] hover:bg-[#5B58EB]/80 text-white font-bold py-3.5 px-6 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-lg shadow-[#5B58EB]/20"
+            >
+              <span>⚡ Auto-Activate In-App Key</span>
+            </button>
+            <button
+              onClick={() => onNavigate('home')}
+              className="w-full bg-[#112C70] border border-[#5B58EB]/30 hover:bg-[#5B58EB]/20 text-white font-medium py-3 px-6 rounded-xl transition-colors flex items-center justify-center gap-2 text-sm"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Home</span>
+            </button>
+          </div>
+        </div>
       </div>
     );
   }

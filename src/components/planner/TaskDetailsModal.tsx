@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
 import { X, Save, Tag, Clock, Calendar, Hash, Flag, Target, Book, Star, Trash2, CalendarCheck, Loader2 } from 'lucide-react';
 import { TaskMetadata, CATEGORIES, PRIORITIES } from './types';
-import { createGoogleCalendarEvent, googleSignIn, getAccessToken } from '../../lib/auth';
+import { createGoogleCalendarEvent, createGoogleTask, googleSignIn, getAccessToken } from '../../lib/auth';
 import ClockTimePicker from '../ClockTimePicker';
 
 interface TaskDetailsModalProps {
@@ -79,7 +79,7 @@ export default function TaskDetailsModal({ task, meta, isOpen, onClose, onSave, 
 
     let token = await getAccessToken();
     if (!token) {
-      setCalendarSyncStatus('Signing in to Google Calendar...');
+      setCalendarSyncStatus('Signing in with Google...');
       try {
         const signResult = await googleSignIn();
         if (signResult) {
@@ -87,7 +87,7 @@ export default function TaskDetailsModal({ task, meta, isOpen, onClose, onSave, 
         }
       } catch (err) {
         setIsSyncingCalendar(false);
-        setCalendarSyncStatus('Google login required for Calendar sync.');
+        setCalendarSyncStatus('Google sign-in required for Calendar sync.');
         return;
       }
     }
@@ -99,7 +99,6 @@ export default function TaskDetailsModal({ task, meta, isOpen, onClose, onSave, 
       dueTime: dueTime || undefined
     });
 
-    // If initial attempt failed due to auth, prompt sign in once and retry
     if (!res.success && (res.error?.includes('authenticated') || res.error?.includes('401') || res.error?.includes('token'))) {
       try {
         setCalendarSyncStatus('Refreshing Google credentials...');
@@ -108,7 +107,8 @@ export default function TaskDetailsModal({ task, meta, isOpen, onClose, onSave, 
           res = await createGoogleCalendarEvent({
             summary: title.trim(),
             description: notes || `Category: ${localMeta.category || 'General'} | Priority: ${localMeta.priority || 'medium'}`,
-            dueDate: dueDate || undefined
+            dueDate: dueDate || undefined,
+            dueTime: dueTime || undefined
           });
         }
       } catch (err) {
@@ -121,6 +121,56 @@ export default function TaskDetailsModal({ task, meta, isOpen, onClose, onSave, 
       setCalendarSyncStatus('Successfully added to Google Calendar!');
     } else {
       setCalendarSyncStatus(res.error || 'Failed to sync to Calendar');
+    }
+  };
+
+  const handleSyncToTasks = async () => {
+    if (!title.trim()) return;
+    setIsSyncingCalendar(true);
+    setCalendarSyncStatus(null);
+
+    let token = await getAccessToken();
+    if (!token) {
+      setCalendarSyncStatus('Signing in with Google...');
+      try {
+        const signResult = await googleSignIn();
+        if (signResult) {
+          token = signResult.accessToken;
+        }
+      } catch (err) {
+        setIsSyncingCalendar(false);
+        setCalendarSyncStatus('Google sign-in required for Tasks sync.');
+        return;
+      }
+    }
+
+    let res = await createGoogleTask({
+      title: title.trim(),
+      notes: notes || `Category: ${localMeta.category || 'General'} | Priority: ${localMeta.priority || 'medium'}`,
+      dueDate: dueDate || undefined
+    });
+
+    if (!res.success && (res.error?.includes('authenticated') || res.error?.includes('401') || res.error?.includes('token'))) {
+      try {
+        setCalendarSyncStatus('Refreshing Google credentials...');
+        const signResult = await googleSignIn();
+        if (signResult) {
+          res = await createGoogleTask({
+            title: title.trim(),
+            notes: notes || `Category: ${localMeta.category || 'General'} | Priority: ${localMeta.priority || 'medium'}`,
+            dueDate: dueDate || undefined
+          });
+        }
+      } catch (err) {
+        // Fall back
+      }
+    }
+
+    setIsSyncingCalendar(false);
+    if (res.success) {
+      setCalendarSyncStatus('Successfully added to Google Tasks!');
+    } else {
+      setCalendarSyncStatus(res.error || 'Failed to sync to Google Tasks');
     }
   };
 
@@ -277,26 +327,41 @@ export default function TaskDetailsModal({ task, meta, isOpen, onClose, onSave, 
             </div>
           </div>
 
-          {/* Google Calendar Sync Section */}
+          {/* Google Sync Section */}
           <div className="pt-2 border-t border-zinc-800/80">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-zinc-950/60 p-3 rounded-xl border border-zinc-800/60">
               <div className="flex items-center space-x-2 text-xs text-zinc-300">
                 <CalendarCheck className="w-4 h-4 text-blue-400" />
-                <span>Google Calendar Sync</span>
+                <span>Google Workspace Sync</span>
               </div>
-              <button
-                type="button"
-                onClick={handleSyncToCalendar}
-                disabled={isSyncingCalendar || !title.trim()}
-                className="flex items-center space-x-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
-              >
-                {isSyncingCalendar ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <CalendarCheck className="w-3.5 h-3.5" />
-                )}
-                <span>Add to Google Calendar</span>
-              </button>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={handleSyncToCalendar}
+                  disabled={isSyncingCalendar || !title.trim()}
+                  className="flex-1 sm:flex-initial flex items-center justify-center space-x-1.5 px-3 py-1.5 bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                >
+                  {isSyncingCalendar ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <CalendarCheck className="w-3.5 h-3.5" />
+                  )}
+                  <span>Google Calendar</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSyncToTasks}
+                  disabled={isSyncingCalendar || !title.trim()}
+                  className="flex-1 sm:flex-initial flex items-center justify-center space-x-1.5 px-3 py-1.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-lg text-xs font-medium transition-colors disabled:opacity-50"
+                >
+                  {isSyncingCalendar ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Tag className="w-3.5 h-3.5" />
+                  )}
+                  <span>Google Tasks</span>
+                </button>
+              </div>
             </div>
             {calendarSyncStatus && (
               <p className={`text-xs mt-2 font-medium ${calendarSyncStatus.includes('Successfully') ? 'text-emerald-400' : 'text-amber-400'}`}>

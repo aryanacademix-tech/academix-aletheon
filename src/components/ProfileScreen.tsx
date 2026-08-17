@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { motion } from 'motion/react';
 import { Screen, UserStats } from '../types';
-import { ChevronLeft, User, Key, LogOut, Check, Save } from 'lucide-react';
+import { ChevronLeft, User, LogOut, Check, Save, Key, Link as LinkIcon, ExternalLink, Sparkles } from 'lucide-react';
 import { auth } from '../firebase';
 import { signOut } from 'firebase/auth';
 import DeveloperCard from './DeveloperCard';
@@ -18,21 +18,22 @@ export default function ProfileScreen({ onNavigate, stats, onUpdateStats }: Prof
   const [avatarSeed, setAvatarSeed] = useState(stats.avatarSeed || '');
   const [isSaving, setIsSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState('');
-
   const [errorMessage, setErrorMessage] = useState('');
 
   const handleSave = async () => {
     setIsSaving(true);
     setErrorMessage('');
 
-    if (apiKey.trim()) {
+    const trimmedKey = apiKey.trim();
+
+    if (trimmedKey) {
       try {
         const response = await fetch('/api/gemini', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            apiKey: apiKey.trim(),
-            model: 'gemini-3.1-flash-lite-preview',
+            apiKey: trimmedKey,
+            model: 'gemini-3.6-flash',
             contents: [{ role: 'user', parts: [{ text: 'Ping' }] }],
             config: {}
           }),
@@ -40,7 +41,7 @@ export default function ProfileScreen({ onNavigate, stats, onUpdateStats }: Prof
 
         if (!response.ok) {
           const data = await response.json().catch(() => ({}));
-          if (data.error === 'INVALID_API_KEY' || response.status === 401) {
+          if (data.error === 'INVALID_API_KEY') {
             setErrorMessage('Invalid API Key! Please enter a valid Gemini API key.');
             setIsSaving(false);
             return;
@@ -51,7 +52,7 @@ export default function ProfileScreen({ onNavigate, stats, onUpdateStats }: Prof
       }
     }
 
-    onUpdateStats({ name, apiKey: apiKey.trim(), avatarSeed });
+    onUpdateStats({ name, apiKey: trimmedKey, avatarSeed });
     setSavedMessage('Profile updated successfully');
     setTimeout(() => setSavedMessage(''), 3000);
     setIsSaving(false);
@@ -112,40 +113,58 @@ export default function ProfileScreen({ onNavigate, stats, onUpdateStats }: Prof
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider ml-1 flex items-center"><Key className="w-3 h-3 mr-1"/> API Key Setup</label>
-                <div className="flex items-center space-x-2">
-                  <a
-                    href="https://aistudio.google.com/app/apikey"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 bg-emerald-500/10 hover:bg-emerald-500/20 px-2 py-1 rounded-lg border border-emerald-500/30 transition-colors flex items-center gap-1"
-                  >
-                    🔑 Get Key from AI Studio ↗
-                  </a>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const newKey = `academix_google_key_${stats.uid || Math.random().toString(36).substring(7)}`;
-                      setApiKey(newKey);
-                      setSavedMessage('In-App Key Generated');
-                      setTimeout(() => setSavedMessage(''), 2500);
-                    }}
-                    className="text-[10px] font-bold text-amber-400 hover:text-amber-300 bg-amber-500/10 hover:bg-amber-500/20 px-2 py-1 rounded-lg border border-amber-500/30 transition-colors"
-                  >
-                    ⚡ Auto In-App Key
-                  </button>
-                </div>
-              </div>
+              <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider ml-1 mb-2 flex items-center"><Key className="w-3.5 h-3.5 mr-1.5 text-yellow-400"/> Custom Gemini API Key</label>
+              
               <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder="In-App Key active or AIzaSy..."
-                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-emerald-500 transition-colors"
+                placeholder="AIzaSy..."
+                className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-yellow-400 transition-colors font-mono text-sm"
               />
-              <p className="text-[11px] text-zinc-500 mt-1.5 ml-1">
-                An auto-managed in-app key is active. You can also paste your personal Gemini API key from Google AI Studio for all device access.
+
+              {/* Highlighted Yellow Box Light Animation Link */}
+              <motion.a 
+                href="https://aistudio.google.com/app/apikey" 
+                target="_blank" 
+                rel="noopener noreferrer"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+                className="mt-3 group relative flex items-center justify-between p-3.5 rounded-2xl bg-yellow-500/15 border-2 border-yellow-400 hover:border-yellow-300 text-yellow-100 shadow-[0_0_25px_rgba(234,179,8,0.4)] hover:shadow-[0_0_40px_rgba(234,179,8,0.7)] transition-all duration-300 overflow-hidden cursor-pointer"
+              >
+                {/* Light Sweep Animation Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-yellow-200/30 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000 pointer-events-none" />
+                
+                {/* Pulsing Light Ring Background Effect */}
+                <div className="absolute -inset-1 bg-gradient-to-r from-yellow-400 to-amber-300 rounded-2xl blur opacity-30 group-hover:opacity-60 transition duration-500 group-hover:duration-200 animate-pulse pointer-events-none" />
+
+                <div className="flex items-center space-x-3 relative z-10">
+                  <div className="w-9 h-9 rounded-xl bg-yellow-400 text-black flex items-center justify-center font-black shadow-md shadow-yellow-400/40 shrink-0 group-hover:scale-110 transition-transform">
+                    <Key className="w-5 h-5" />
+                  </div>
+                  <div className="text-left">
+                    <div className="flex items-center space-x-1.5">
+                      <span className="text-[11px] font-black text-yellow-300 uppercase tracking-wider">Click Here To Get API Key</span>
+                      <Sparkles className="w-3.5 h-3.5 text-yellow-200 animate-bounce" />
+                    </div>
+                    <p className="text-xs font-semibold text-yellow-100/90 leading-tight">
+                      Google AI Studio (Free Manual Key)
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-1.5 text-xs font-extrabold text-black bg-yellow-400 hover:bg-yellow-300 px-3 py-1.5 rounded-xl shadow-md shadow-yellow-400/30 z-10 shrink-0 group-hover:translate-x-0.5 transition-all">
+                  <span>Get Key</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </div>
+              </motion.a>
+
+              <p className="text-[11px] text-zinc-400 leading-relaxed bg-zinc-950 p-2.5 rounded-xl border border-zinc-800 my-2">
+                💡 <strong className="text-zinc-300">Account Note:</strong> Log in with a personal Google account (<code className="text-amber-400 font-mono">@gmail.com</code>). School/work accounts show restriction policies.
+              </p>
+
+              <p className="text-[11px] text-zinc-500 mt-2 ml-1">
+                Enter your manual Google AI Studio key to power all AI features with seamless multi-model fallback.
               </p>
             </div>
           </div>
