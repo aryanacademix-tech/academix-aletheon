@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#09090b" />
     <meta name="description" content="Academix Aletheon - Advanced AI-powered study, research, and calculation productivity suite." />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -23,6 +23,7 @@
         window.addEventListener('load', async () => {
           try {
             const reg = await navigator.serviceWorker.register('/sw.js');
+            reg.update().catch(() => {});
             if ('sync' in reg) {
               reg.sync.register('background-sync').catch(() => {});
             }

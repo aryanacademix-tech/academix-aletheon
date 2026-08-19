@@ -567,33 +567,57 @@ Provide a quick, laser-focused answer sticking strictly to the topic and directl
         }
       } catch (e) {}
 
-      const response = await fetch('/api/gemini', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          apiKey,
-          model: researchStyle === 'deep' ? 'gemini-3.1-pro-preview' : 'gemini-3.6-flash',
-          thinkingMode: researchStyle === 'deep',
-          contents: [
-            ...messages.slice(-10).map(m => ({
-              role: m.role === 'assistant' ? 'model' : 'user',
-              parts: [{ text: m.content || 'Specialized Studio Deck Resource' }]
-            })),
-            { role: 'user', parts: [{ text: textToSend }] }
-          ],
-          config: {
-            tools: [{ googleSearch: {} }],
-            systemInstruction: activeSysInstruction
-          }
-        }),
-      });
+      let response: Response | null = null;
+      let data: any = {};
+      let attempts = 0;
+      const maxAttempts = 2;
 
-      const data = await response.json();
+      while (attempts < maxAttempts) {
+        attempts++;
+        try {
+          response = await fetch('/api/gemini', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              apiKey,
+              model: researchStyle === 'deep' ? 'gemini-2.5-pro' : 'gemini-2.5-flash',
+              thinkingMode: researchStyle === 'deep',
+              contents: [
+                ...messages.slice(-10).map(m => ({
+                  role: m.role === 'assistant' ? 'model' : 'user',
+                  parts: [{ text: m.content || 'Specialized Studio Deck Resource' }]
+                })),
+                { role: 'user', parts: [{ text: textToSend }] }
+              ],
+              config: {
+                tools: [{ googleSearch: {} }],
+                systemInstruction: activeSysInstruction
+              }
+            }),
+          });
+
+          if (response.ok) {
+            data = await response.json();
+            break;
+          }
+
+          if (response.status === 429 && attempts < maxAttempts) {
+            await new Promise(res => setTimeout(res, 1200));
+            continue;
+          }
+          data = await response.json().catch(() => ({}));
+          break;
+        } catch (fetchErr) {
+          if (attempts >= maxAttempts) throw fetchErr;
+          await new Promise(res => setTimeout(res, 1000));
+        }
+      }
+
       const endTime = performance.now();
       const totalSec = parseFloat(((endTime - startTime) / 1000).toFixed(2));
       setLastExecutionTime(totalSec);
 
-      if (response.ok) {
+      if (response && response.ok) {
         const replyText = data.text || 'No response';
 
         // Thoroughly extract web resources from groundingChunks as well as markdown links & URLs in replyText

@@ -61,6 +61,7 @@ async function startServer() {
     try {
       const event = {
         httpMethod: req.method,
+        headers: req.headers,
         body: JSON.stringify(req.body),
       };
       const context = {};
@@ -78,6 +79,7 @@ async function startServer() {
     try {
       const event = {
         httpMethod: req.method,
+        headers: req.headers,
         queryStringParameters: req.query,
         body: JSON.stringify(req.body || {}),
       };

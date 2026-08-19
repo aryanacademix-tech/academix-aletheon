@@ -33,7 +33,7 @@ export default function ProfileScreen({ onNavigate, stats, onUpdateStats }: Prof
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             apiKey: trimmedKey,
-            model: 'gemini-3.6-flash',
+            model: 'gemini-2.5-flash',
             contents: [{ role: 'user', parts: [{ text: 'Ping' }] }],
             config: {}
           }),

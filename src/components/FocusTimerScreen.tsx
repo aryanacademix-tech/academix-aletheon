@@ -506,20 +506,37 @@ export default function FocusTimerScreen({ onNavigate, onActivityComplete }: Foc
   // YouTube API Call
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!searchQuery.trim()) return;
+    const queryTrimmed = searchQuery.trim();
+    if (!queryTrimmed) return;
     
+    // Check if user entered a direct YouTube video URL or ID
+    const ytUrlMatch = queryTrimmed.match(/(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/i);
+    if (ytUrlMatch && ytUrlMatch[1]) {
+      const videoId = ytUrlMatch[1];
+      const directVideo: YTVideo = {
+        id: videoId,
+        title: 'Selected YouTube Video',
+        thumbnail: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+        channelTitle: 'YouTube Stream',
+        channelId: ''
+      };
+      playVideo(directVideo);
+      setSearchResults([directVideo]);
+      return;
+    }
+
     setActiveChannel(null);
     setIsSearching(true);
     try {
-      if (searchQuery.startsWith('@')) {
-        const query = searchQuery.substring(1).trim();
+      if (queryTrimmed.startsWith('@')) {
+        const query = queryTrimmed.substring(1).trim();
         const res = await fetch(`/api/youtube?action=search&maxResults=15&q=${encodeURIComponent(query)}&type=channel`);
         const data = await res.json();
         if (data.items) {
           const mapped = data.items.map((item: any) => ({
             id: item.id.channelId,
             title: item.snippet.title,
-            thumbnail: item.snippet.thumbnails.medium.url,
+            thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || '',
             channelTitle: item.snippet.title,
             channelId: item.id.channelId,
             isChannelResult: true
@@ -527,13 +544,13 @@ export default function FocusTimerScreen({ onNavigate, onActivityComplete }: Foc
           setSearchResults(mapped);
         }
       } else {
-        const res = await fetch(`/api/youtube?action=search&maxResults=15&type=video&q=${encodeURIComponent(searchQuery)}`);
+        const res = await fetch(`/api/youtube?action=search&maxResults=15&type=video&q=${encodeURIComponent(queryTrimmed)}`);
         const data = await res.json();
         if (data.items) {
           const mapped = data.items.map((item: any) => ({
             id: item.id.videoId,
             title: item.snippet.title,
-            thumbnail: item.snippet.thumbnails.medium.url,
+            thumbnail: item.snippet.thumbnails?.medium?.url || item.snippet.thumbnails?.default?.url || '',
             channelTitle: item.snippet.channelTitle,
             channelId: item.snippet.channelId
           }));
@@ -1102,6 +1119,9 @@ export default function FocusTimerScreen({ onNavigate, onActivityComplete }: Foc
                     height: '100%',
                     playerVars: {
                       autoplay: 1,
+                      playsinline: 1,
+                      enablejsapi: 1,
+                      origin: typeof window !== 'undefined' ? window.location.origin : undefined,
                     },
                   }}
                   onStateChange={handleVideoStateChange}

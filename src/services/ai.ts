@@ -208,7 +208,7 @@ export async function generatePuzzle(
   Provide a clear, step-by-step explanation for the solution.
   `;
 
-  let modelName = "gemini-3.6-flash";
+  let modelName = "gemini-2.5-flash";
   let config: any = {
     responseMimeType: "application/json",
     responseSchema: {
@@ -231,7 +231,7 @@ export async function generatePuzzle(
   };
 
   if (difficulty === 'extreme') {
-    modelName = "gemini-3.6-flash";
+    modelName = "gemini-2.5-flash";
   }
 
   try {
@@ -302,7 +302,7 @@ export async function generateBatchPuzzles(
 
   try {
     const response = await generateContentProxy({
-      model: "gemini-3.6-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: config
     });
@@ -375,7 +375,7 @@ export async function generateOutsideBoxPuzzle(): Promise<Puzzle> {
   let response;
   try {
     response = await generateContentProxy({
-      model: "gemini-3.6-flash",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }]
@@ -414,11 +414,11 @@ export async function getHint(puzzle: Puzzle, currentAttempt: string, hintLevel:
   Do NOT give the final answer directly. Keep it concise, encouraging, and helpful.
   `;
 
-  let modelName = "gemini-3.6-flash";
+  let modelName = "gemini-2.5-flash";
   let config: any = {};
 
   if (puzzle.difficulty === 'extreme') {
-    modelName = "gemini-3.6-flash";
+    modelName = "gemini-2.5-flash";
   }
 
   try {
@@ -447,7 +447,7 @@ export async function evaluateLogic(puzzle: Puzzle, userAnswer: string, userLogi
    If their logic is sound but they made a tiny calculation error, you can decide whether to mark it correct or incorrect based on the severity.
    `;
 
-   let modelName = "gemini-3.6-flash";
+   let modelName = "gemini-2.5-flash";
    let config: any = {
      responseMimeType: "application/json",
      responseSchema: {
@@ -461,7 +461,7 @@ export async function evaluateLogic(puzzle: Puzzle, userAnswer: string, userLogi
    };
 
    if (puzzle.difficulty === 'extreme') {
-     modelName = "gemini-3-flash-preview";
+     modelName = "gemini-2.5-flash";
    }
 
    try {

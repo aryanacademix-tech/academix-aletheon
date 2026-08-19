@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Academix Aletheon</string>
+    <string name="title_activity_main">Academix Aletheon</string>
+    <string name="package_name">com.academix.app</string>
+    <string name="custom_url_scheme">com.academix.app</string>
+</resources>

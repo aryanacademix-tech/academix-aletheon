@@ -243,7 +243,7 @@ export default function QuizMasterScreen({ onNavigate, onActivityComplete }: Qui
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           apiKey,
-          model: 'gemini-3.6-flash',
+          model: 'gemini-2.5-flash',
           contents: [{ role: 'user', parts: [{ text: prompt }] }],
           config: {
             temperature: 0.7,

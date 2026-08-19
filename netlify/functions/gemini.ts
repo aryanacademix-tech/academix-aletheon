@@ -65,11 +65,10 @@ export const handler = async (event: any, context: any) => {
 
       // Try image models in priority order
       const imageModels = [
-        'gemini-3-pro-image-preview',
-        'gemini-3.1-flash-image-preview',
+        'gemini-3.1-flash-image',
+        'gemini-3.1-flash-lite-image',
         'imagen-3.0-generate-002',
-        'imagen-3.0-fast-generate-001',
-        'imagen-4.0-generate-001'
+        'imagen-3.0-fast-generate-001'
       ];
 
       for (const imgModel of imageModels) {
@@ -104,7 +103,7 @@ export const handler = async (event: any, context: any) => {
       // Fallback to generating SVG infographic using gemini content generation with high detail
       try {
         const svgResponse = await ai.models.generateContent({
-          model: 'gemini-3.6-flash',
+          model: 'gemini-2.5-flash',
           contents: [{
             role: 'user',
             parts: [{ text: `Create a complete, visually stunning, highly detailed modern educational infographic SVG code specifically for the topic: "${imgPrompt}".
@@ -147,34 +146,26 @@ CRITICAL VISUAL & CONTENT REQUIREMENTS:
 
     // Handle model selection with dynamic resilient fallback cascade
     const flashFallbackList = [
-      'gemini-3.6-flash',
-      'gemini-3.1-flash-lite',
       'gemini-2.5-flash',
       'gemini-2.5-flash-lite',
+      'gemini-3.7-flash',
       'gemini-flash-latest'
     ];
     
     const proFallbackList = [
-      'gemini-3.1-pro-preview',
-      'gemini-3.6-flash',
-      'gemini-3.1-flash-lite',
+      'gemini-2.5-pro',
       'gemini-2.5-flash',
       'gemini-2.5-flash-lite',
+      'gemini-3.7-flash',
       'gemini-flash-latest'
     ];
 
     let reqConfig = config || {};
     let isProOrThinking = thinkingMode || model?.includes('pro');
-    let initialModel = model || 'gemini-3.6-flash';
+    let initialModel = model || 'gemini-2.5-flash';
 
     if (thinkingMode) {
-      initialModel = 'gemini-3.1-pro-preview';
-      reqConfig = {
-        ...reqConfig,
-        thinkingConfig: {
-          thinkingLevel: 'HIGH'
-        }
-      };
+      initialModel = 'gemini-2.5-pro';
     }
 
     // Build unique model cascade list starting with initialModel
@@ -205,11 +196,8 @@ CRITICAL VISUAL & CONTENT REQUIREMENTS:
               config: currentConfig
             });
           } catch (toolErr: any) {
-            const toolErrStr = String(toolErr?.message || toolErr).toLowerCase();
-            const isQuotaOrRateLimit = toolErrStr.includes('429') || toolErrStr.includes('quota') || toolErrStr.includes('resource_exhausted') || toolErrStr.includes('rate limit');
-            
-            if (currentConfig.tools && !isQuotaOrRateLimit) {
-              // Try without tools if tool invocation had a schema/formatting issue
+            // If tool call fails (e.g. search grounding rate limit or schema failure), retry immediately without tools
+            if (currentConfig.tools) {
               const noToolsConfig = { ...currentConfig };
               delete noToolsConfig.tools;
               response = await ai.models.generateContent({
